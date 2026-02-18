@@ -29,10 +29,17 @@
 			var $btn = $(this);
 			$btn.prop('disabled', true).text('Saving...');
 
+			// Client-side clamping to match server-side validation.
+			var maxVal = parseInt($('#fpp-global-max-replacements').val(), 10) || 1;
+			var cap    = parseInt(fppInterlinking.max_replacements_cap, 10) || 100;
+			if (maxVal < 1) maxVal = 1;
+			if (maxVal > cap) maxVal = cap;
+			$('#fpp-global-max-replacements').val(maxVal);
+
 			$.post(fppInterlinking.ajax_url, {
 				action:           'fpp_interlinking_save_settings',
 				nonce:            fppInterlinking.nonce,
-				max_replacements: $('#fpp-global-max-replacements').val(),
+				max_replacements: maxVal,
 				nofollow:         $('#fpp-global-nofollow').is(':checked') ? 1 : 0,
 				new_tab:          $('#fpp-global-new-tab').is(':checked') ? 1 : 0,
 				case_sensitive:   $('#fpp-global-case-sensitive').is(':checked') ? 1 : 0,
@@ -46,7 +53,7 @@
 				}
 			}).fail(function() {
 				$btn.prop('disabled', false).text('Save Settings');
-				FPP.showNotice('error', 'Request failed. Please try again.');
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
 			});
 		},
 
@@ -56,12 +63,23 @@
 			var targetUrl = $.trim($('#fpp-target-url').val());
 
 			if (!keyword || !targetUrl) {
-				FPP.showNotice('error', 'Keyword and Target URL are required.');
+				FPP.showNotice('error', fppInterlinking.i18n.required);
+				return;
+			}
+
+			// Basic URL validation.
+			if (!/^https?:\/\/.+/i.test(targetUrl)) {
+				FPP.showNotice('error', 'Please enter a valid absolute URL (starting with http:// or https://).');
 				return;
 			}
 
 			var $btn = $(this);
 			$btn.prop('disabled', true).text('Adding...');
+
+			// Clamp per-keyword max replacements.
+			var perMax = parseInt($('#fpp-per-max-replacements').val(), 10) || 0;
+			var cap    = parseInt(fppInterlinking.max_replacements_cap, 10) || 100;
+			if (perMax > cap) perMax = cap;
 
 			$.post(fppInterlinking.ajax_url, {
 				action:           'fpp_interlinking_add_keyword',
@@ -70,7 +88,7 @@
 				target_url:       targetUrl,
 				nofollow:         $('#fpp-per-nofollow').is(':checked') ? 1 : 0,
 				new_tab:          $('#fpp-per-new-tab').is(':checked') ? 1 : 0,
-				max_replacements: $('#fpp-per-max-replacements').val() || 0
+				max_replacements: perMax
 			}, function(response) {
 				$btn.prop('disabled', false).text('Add Keyword');
 				if (response.success) {
@@ -84,7 +102,7 @@
 				}
 			}).fail(function() {
 				$btn.prop('disabled', false).text('Add Keyword');
-				FPP.showNotice('error', 'Request failed. Please try again.');
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
 			});
 		},
 
@@ -115,12 +133,21 @@
 			var targetUrl = $.trim($('#fpp-target-url').val());
 
 			if (!id || !keyword || !targetUrl) {
-				FPP.showNotice('error', 'Keyword and Target URL are required.');
+				FPP.showNotice('error', fppInterlinking.i18n.required);
+				return;
+			}
+
+			if (!/^https?:\/\/.+/i.test(targetUrl)) {
+				FPP.showNotice('error', 'Please enter a valid absolute URL (starting with http:// or https://).');
 				return;
 			}
 
 			var $btn = $(this);
 			$btn.prop('disabled', true).text('Updating...');
+
+			var perMax = parseInt($('#fpp-per-max-replacements').val(), 10) || 0;
+			var cap    = parseInt(fppInterlinking.max_replacements_cap, 10) || 100;
+			if (perMax > cap) perMax = cap;
 
 			$.post(fppInterlinking.ajax_url, {
 				action:           'fpp_interlinking_update_keyword',
@@ -130,7 +157,7 @@
 				target_url:       targetUrl,
 				nofollow:         $('#fpp-per-nofollow').is(':checked') ? 1 : 0,
 				new_tab:          $('#fpp-per-new-tab').is(':checked') ? 1 : 0,
-				max_replacements: $('#fpp-per-max-replacements').val() || 0
+				max_replacements: perMax
 			}, function(response) {
 				$btn.prop('disabled', false).text('Update Keyword');
 				if (response.success) {
@@ -142,7 +169,7 @@
 				}
 			}).fail(function() {
 				$btn.prop('disabled', false).text('Update Keyword');
-				FPP.showNotice('error', 'Request failed. Please try again.');
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
 			});
 		},
 
@@ -157,7 +184,7 @@
 
 		deleteKeyword: function(e) {
 			e.preventDefault();
-			if (!confirm('Are you sure you want to delete this keyword mapping?')) {
+			if (!confirm(fppInterlinking.i18n.confirm_delete)) {
 				return;
 			}
 
@@ -182,7 +209,7 @@
 					FPP.showNotice('error', response.data.message);
 				}
 			}).fail(function() {
-				FPP.showNotice('error', 'Request failed. Please try again.');
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
 			});
 		},
 
@@ -215,17 +242,17 @@
 					FPP.showNotice('error', response.data.message);
 				}
 			}).fail(function() {
-				FPP.showNotice('error', 'Request failed. Please try again.');
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
 			});
 		},
 
 		appendKeywordRow: function(kw) {
 			var row = '<tr id="fpp-keyword-row-' + kw.id + '">'
 				+ '<td class="column-keyword">' + FPP.escHtml(kw.keyword) + '</td>'
-				+ '<td class="column-url"><a href="' + FPP.escAttr(kw.target_url) + '" target="_blank" rel="noopener">' + FPP.escHtml(kw.target_url) + '</a></td>'
+				+ '<td class="column-url"><a href="' + FPP.escAttr(kw.target_url) + '" target="_blank" rel="noopener noreferrer">' + FPP.escHtml(kw.target_url) + '</a></td>'
 				+ '<td class="column-nofollow">' + (kw.nofollow ? 'Yes' : 'No') + '</td>'
 				+ '<td class="column-newtab">' + (kw.new_tab ? 'Yes' : 'No') + '</td>'
-				+ '<td class="column-max">' + (kw.max_replacements ? kw.max_replacements : 'Global') + '</td>'
+				+ '<td class="column-max">' + (kw.max_replacements ? FPP.escHtml(String(kw.max_replacements)) : 'Global') + '</td>'
 				+ '<td class="column-active"><span class="fpp-badge-active">Active</span></td>'
 				+ '<td class="column-actions">'
 				+ '<button type="button" class="button button-small fpp-edit-keyword"'
@@ -276,12 +303,19 @@
 			setTimeout(function() { $notice.fadeOut(400, function() { $(this).remove(); }); }, 4000);
 		},
 
+		/**
+		 * Escape a string for safe use as HTML text content.
+		 * Uses the DOM to ensure proper entity encoding.
+		 */
 		escHtml: function(str) {
 			var div = document.createElement('div');
 			div.appendChild(document.createTextNode(str));
 			return div.innerHTML;
 		},
 
+		/**
+		 * Escape a string for safe use inside an HTML attribute.
+		 */
 		escAttr: function(str) {
 			return String(str)
 				.replace(/&/g, '&amp;')
