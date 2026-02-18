@@ -1,0 +1,71 @@
+.fpp-section {
+	margin-bottom: 20px;
+}
+
+.fpp-section-toggle {
+	cursor: pointer;
+	user-select: none;
+}
+
+.fpp-section-toggle .dashicons {
+	vertical-align: middle;
+	margin-left: 5px;
+}
+
+.fpp-settings-section .form-table {
+	margin-top: 0;
+}
+
+/* Table column widths */
+.wp-list-table .column-keyword {
+	width: 18%;
+}
+
+.wp-list-table .column-url {
+	width: 28%;
+	word-break: break-all;
+}
+
+.wp-list-table .column-nofollow,
+.wp-list-table .column-newtab,
+.wp-list-table .column-max,
+.wp-list-table .column-active {
+	width: 8%;
+	text-align: center;
+}
+
+.wp-list-table .column-actions {
+	width: 22%;
+}
+
+/* Status badges */
+.fpp-badge-active {
+	color: #00a32a;
+	font-weight: 600;
+}
+
+.fpp-badge-inactive {
+	color: #b32d2e;
+	font-weight: 600;
+}
+
+/* Action buttons spacing */
+.column-actions .button {
+	margin-right: 4px;
+	margin-bottom: 4px;
+}
+
+/* Per-mapping overrides fieldset */
+.fpp-add-keyword-section fieldset label {
+	display: inline-block;
+	margin-bottom: 6px;
+}
+
+/* Notice positioning */
+#fpp-notices {
+	margin-top: 10px;
+}
+
+#fpp-notices .notice {
+	margin-left: 0;
+}
