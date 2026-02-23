@@ -31,6 +31,11 @@ class FPP_Interlinking_Admin {
 		add_action( 'wp_ajax_fpp_interlinking_delete_keyword', array( $this, 'ajax_delete_keyword' ) );
 		add_action( 'wp_ajax_fpp_interlinking_toggle_keyword', array( $this, 'ajax_toggle_keyword' ) );
 		add_action( 'wp_ajax_fpp_interlinking_save_settings', array( $this, 'ajax_save_settings' ) );
+
+		// v1.2.0: Scan, suggest, and search endpoints.
+		add_action( 'wp_ajax_fpp_interlinking_search_posts', array( $this, 'ajax_search_posts' ) );
+		add_action( 'wp_ajax_fpp_interlinking_scan_keyword', array( $this, 'ajax_scan_keyword' ) );
+		add_action( 'wp_ajax_fpp_interlinking_suggest_keywords', array( $this, 'ajax_suggest_keywords' ) );
 	}
 
 	/**
@@ -80,9 +85,25 @@ class FPP_Interlinking_Admin {
 			'nonce'                => wp_create_nonce( 'fpp_interlinking_nonce' ),
 			'max_replacements_cap' => FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT,
 			'i18n'                 => array(
-				'confirm_delete' => esc_html__( 'Are you sure you want to delete this keyword mapping?', 'fpp-interlinking' ),
-				'required'       => esc_html__( 'Keyword and Target URL are required.', 'fpp-interlinking' ),
-				'request_failed' => esc_html__( 'Request failed. Please try again.', 'fpp-interlinking' ),
+				'confirm_delete'   => esc_html__( 'Are you sure you want to delete this keyword mapping?', 'fpp-interlinking' ),
+				'required'         => esc_html__( 'Keyword and Target URL are required.', 'fpp-interlinking' ),
+				'request_failed'   => esc_html__( 'Request failed. Please try again.', 'fpp-interlinking' ),
+				// Scan per keyword.
+				'scan_found'       => esc_html__( 'Found %d matching posts/pages:', 'fpp-interlinking' ),
+				'scan_no_results'  => esc_html__( 'No posts or pages found matching this keyword.', 'fpp-interlinking' ),
+				'use_this_url'     => esc_html__( 'Use this URL', 'fpp-interlinking' ),
+				'updating'         => esc_html__( 'Updating...', 'fpp-interlinking' ),
+				'close'            => esc_html__( 'Close', 'fpp-interlinking' ),
+				// Suggest keywords.
+				'scanning'         => esc_html__( 'Scanning...', 'fpp-interlinking' ),
+				'scan_post_titles' => esc_html__( 'Scan Post Titles', 'fpp-interlinking' ),
+				'no_suggestions'   => esc_html__( 'No published posts or pages found.', 'fpp-interlinking' ),
+				'already_mapped'   => esc_html__( 'Already mapped', 'fpp-interlinking' ),
+				'available'        => esc_html__( 'Available', 'fpp-interlinking' ),
+				'add_as_keyword'   => esc_html__( 'Add as Keyword', 'fpp-interlinking' ),
+				'page_info'        => esc_html__( 'Page %1$d of %2$d (%3$d total)', 'fpp-interlinking' ),
+				// Quick-add search.
+				'no_posts_found'   => esc_html__( 'No posts found.', 'fpp-interlinking' ),
 			),
 		) );
 	}
@@ -161,6 +182,20 @@ class FPP_Interlinking_Admin {
 					<p>
 						<button type="button" id="fpp-save-settings" class="button button-primary"><?php esc_html_e( 'Save Settings', 'fpp-interlinking' ); ?></button>
 					</p>
+				</div>
+			</div>
+
+			<hr />
+
+			<!-- Quick-Add from Post Search -->
+			<div class="fpp-section fpp-quick-add-section">
+				<h2><?php esc_html_e( 'Quick Add from Post Search', 'fpp-interlinking' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Search for an existing post or page to auto-fill the keyword and URL fields below.', 'fpp-interlinking' ); ?></p>
+				<div class="fpp-search-wrapper">
+					<input type="text" id="fpp-post-search" class="regular-text"
+						placeholder="<?php esc_attr_e( 'Type to search posts and pages...', 'fpp-interlinking' ); ?>"
+						autocomplete="off" />
+					<div id="fpp-post-search-results" class="fpp-search-dropdown" style="display:none;"></div>
 				</div>
 			</div>
 
@@ -256,6 +291,11 @@ class FPP_Interlinking_Admin {
 										data-max="<?php echo esc_attr( $kw['max_replacements'] ); ?>">
 										<?php esc_html_e( 'Edit', 'fpp-interlinking' ); ?>
 									</button>
+									<button type="button" class="button button-small fpp-scan-keyword"
+										data-id="<?php echo esc_attr( $kw['id'] ); ?>"
+										data-keyword="<?php echo esc_attr( $kw['keyword'] ); ?>">
+										<?php esc_html_e( 'Scan', 'fpp-interlinking' ); ?>
+									</button>
 									<button type="button" class="button button-small fpp-toggle-keyword"
 										data-id="<?php echo esc_attr( $kw['id'] ); ?>"
 										data-active="<?php echo esc_attr( $kw['is_active'] ); ?>">
@@ -267,10 +307,63 @@ class FPP_Interlinking_Admin {
 									</button>
 								</td>
 							</tr>
+							<tr id="fpp-scan-results-row-<?php echo esc_attr( $kw['id'] ); ?>" class="fpp-scan-results-row" style="display:none;">
+								<td colspan="7">
+									<div class="fpp-scan-results-container">
+										<p class="fpp-scan-results-loading" style="display:none;">
+											<span class="spinner is-active"></span>
+											<?php esc_html_e( 'Scanning...', 'fpp-interlinking' ); ?>
+										</p>
+										<div class="fpp-scan-results-list"></div>
+									</div>
+								</td>
+							</tr>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
 			</div>
+
+			<hr />
+
+			<!-- Suggest Keywords from Content -->
+			<div class="fpp-section fpp-suggest-section">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-suggestions">
+					<?php esc_html_e( 'Suggest Keywords from Content', 'fpp-interlinking' ); ?>
+					<span class="dashicons dashicons-arrow-down-alt2"></span>
+				</h2>
+				<div class="fpp-section-content" id="fpp-suggestions-content" style="display:none;">
+					<p class="description">
+						<?php esc_html_e( 'Scan your published posts and pages to discover potential keyword mappings based on their titles.', 'fpp-interlinking' ); ?>
+					</p>
+					<p>
+						<button type="button" id="fpp-scan-titles" class="button button-secondary">
+							<?php esc_html_e( 'Scan Post Titles', 'fpp-interlinking' ); ?>
+						</button>
+					</p>
+					<div id="fpp-suggestions-results" style="display:none;">
+						<table class="wp-list-table widefat fixed striped" id="fpp-suggestions-table">
+							<thead>
+								<tr>
+									<th class="column-sg-title"><?php esc_html_e( 'Post Title (Keyword)', 'fpp-interlinking' ); ?></th>
+									<th class="column-sg-type"><?php esc_html_e( 'Type', 'fpp-interlinking' ); ?></th>
+									<th class="column-sg-url"><?php esc_html_e( 'URL', 'fpp-interlinking' ); ?></th>
+									<th class="column-sg-status"><?php esc_html_e( 'Status', 'fpp-interlinking' ); ?></th>
+									<th class="column-sg-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+								</tr>
+							</thead>
+							<tbody id="fpp-suggestions-tbody"></tbody>
+						</table>
+						<div id="fpp-suggestions-pagination" class="tablenav bottom">
+							<div class="tablenav-pages">
+								<span class="fpp-suggestions-info"></span>
+								<button type="button" id="fpp-suggestions-prev" class="button button-small" disabled>&laquo; <?php esc_html_e( 'Previous', 'fpp-interlinking' ); ?></button>
+								<button type="button" id="fpp-suggestions-next" class="button button-small"><?php esc_html_e( 'Next', 'fpp-interlinking' ); ?> &raquo;</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
 		</div>
 		<?php
 	}
@@ -484,5 +577,170 @@ class FPP_Interlinking_Admin {
 		delete_transient( 'fpp_interlinking_keywords_cache' );
 
 		wp_send_json_success( array( 'message' => __( 'Settings saved successfully.', 'fpp-interlinking' ) ) );
+	}
+
+	/* ── v1.2.0: Scan, Suggest & Search Handlers ──────────────────────── */
+
+	/**
+	 * AJAX: Search posts/pages by title for autocomplete (Quick-Add).
+	 *
+	 * Returns a lightweight result set (max 10) for fast response.
+	 *
+	 * @since 1.2.0
+	 */
+	public function ajax_search_posts() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$search = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+
+		if ( strlen( $search ) < 2 ) {
+			wp_send_json_success( array( 'results' => array() ) );
+		}
+
+		$query = new WP_Query( array(
+			's'                => $search,
+			'post_type'        => array( 'post', 'page' ),
+			'post_status'      => 'publish',
+			'posts_per_page'   => 10,
+			'orderby'          => 'relevance',
+			'order'            => 'DESC',
+			'no_found_rows'    => true,
+			'suppress_filters' => false,
+		) );
+
+		$results = array();
+
+		if ( $query->have_posts() ) {
+			while ( $query->have_posts() ) {
+				$query->the_post();
+				$type_obj  = get_post_type_object( get_post_type() );
+				$results[] = array(
+					'id'        => get_the_ID(),
+					'title'     => get_the_title(),
+					'permalink' => get_permalink(),
+					'post_type' => $type_obj ? $type_obj->labels->singular_name : get_post_type(),
+				);
+			}
+			wp_reset_postdata();
+		}
+
+		wp_send_json_success( array( 'results' => $results ) );
+	}
+
+	/**
+	 * AJAX: Scan for posts/pages whose title matches a keyword.
+	 *
+	 * Used by the "Scan" button on each keyword row.
+	 *
+	 * @since 1.2.0
+	 */
+	public function ajax_scan_keyword() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$keyword = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
+
+		if ( empty( $keyword ) ) {
+			wp_send_json_error( array( 'message' => __( 'Keyword is required.', 'fpp-interlinking' ) ) );
+		}
+
+		$query = new WP_Query( array(
+			's'                => $keyword,
+			'post_type'        => array( 'post', 'page' ),
+			'post_status'      => 'publish',
+			'posts_per_page'   => 20,
+			'orderby'          => 'relevance',
+			'order'            => 'DESC',
+			'no_found_rows'    => true,
+			'suppress_filters' => false,
+		) );
+
+		$results = array();
+
+		if ( $query->have_posts() ) {
+			while ( $query->have_posts() ) {
+				$query->the_post();
+				$type_obj  = get_post_type_object( get_post_type() );
+				$results[] = array(
+					'id'        => get_the_ID(),
+					'title'     => get_the_title(),
+					'permalink' => get_permalink(),
+					'post_type' => $type_obj ? $type_obj->labels->singular_name : get_post_type(),
+				);
+			}
+			wp_reset_postdata();
+		}
+
+		wp_send_json_success( array(
+			'results' => $results,
+			'keyword' => $keyword,
+		) );
+	}
+
+	/**
+	 * AJAX: Suggest keywords from published post/page titles.
+	 *
+	 * Returns paginated results with an `already_added` flag for each title
+	 * that matches an existing keyword mapping.
+	 *
+	 * @since 1.2.0
+	 */
+	public function ajax_suggest_keywords() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$page     = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1;
+		$per_page = 30;
+
+		$query = new WP_Query( array(
+			'post_type'      => array( 'post', 'page' ),
+			'post_status'    => 'publish',
+			'posts_per_page' => $per_page,
+			'paged'          => max( 1, $page ),
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+		) );
+
+		// Build a lookup of existing keywords (lowercased) for O(1) checks.
+		$existing_keywords = FPP_Interlinking_DB::get_all_keywords();
+		$existing_map      = array();
+		foreach ( $existing_keywords as $ek ) {
+			$existing_map[ strtolower( $ek['keyword'] ) ] = true;
+		}
+
+		$results = array();
+
+		if ( $query->have_posts() ) {
+			while ( $query->have_posts() ) {
+				$query->the_post();
+				$title    = get_the_title();
+				$type_obj = get_post_type_object( get_post_type() );
+				$results[] = array(
+					'id'            => get_the_ID(),
+					'title'         => $title,
+					'permalink'     => get_permalink(),
+					'post_type'     => $type_obj ? $type_obj->labels->singular_name : get_post_type(),
+					'already_added' => isset( $existing_map[ strtolower( $title ) ] ),
+				);
+			}
+			wp_reset_postdata();
+		}
+
+		wp_send_json_success( array(
+			'results'     => $results,
+			'page'        => max( 1, $page ),
+			'total_pages' => $query->max_num_pages,
+			'total_posts' => $query->found_posts,
+		) );
 	}
 }

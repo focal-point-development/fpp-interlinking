@@ -1,9 +1,15 @@
 # FPP Interlinking
 
-Automate SEO internal linking for WordPress. Map keywords to target URLs and the plugin replaces them with anchor links across your posts and pages automatically.
+Automate SEO internal linking for WordPress. Map keywords to target URLs and the plugin replaces them with anchor links across your posts and pages automatically. Scan your existing content to discover interlinking opportunities.
 
 ## Features
 
+### Content Discovery (v1.2.0)
+- **Quick-Add Post Search** — live autocomplete: type to search posts/pages, click to auto-fill keyword + URL
+- **Scan per Keyword** — click "Scan" on any keyword row to find matching posts and assign a URL in one click
+- **Suggest Keywords from Content** — paginated scanner lists all published titles as potential keywords with one-click add
+
+### Core
 - **Keyword-to-URL mapping** with unlimited entries
 - **Global defaults** for max replacements, nofollow, new-tab, and case sensitivity
 - **Per-keyword overrides** for nofollow, new-tab, and max replacements
@@ -13,7 +19,7 @@ Automate SEO internal linking for WordPress. Map keywords to target URLs and the
 - **Longest-match-first** processing to avoid partial match conflicts
 - **Post/page exclusions** by ID
 - **Transient caching** (1-hour) for minimal DB overhead
-- **AJAX admin UI** — no page reloads for add/edit/delete/toggle
+- **AJAX admin UI** — no page reloads for any operation
 - **Multisite compatible** — clean uninstall across all network sites
 - **i18n ready** — all strings wrapped for translation
 
@@ -32,9 +38,42 @@ Automate SEO internal linking for WordPress. Map keywords to target URLs and the
 
 ## Usage
 
-### Global Settings
+### Quick-Add Post Search
 
-Navigate to **Settings > FPP Interlinking** and configure:
+At the top of the settings page, use the search field to find existing posts and pages:
+
+1. Type 2+ characters
+2. A dropdown shows matching posts/pages with title, type, and URL
+3. Click a result — the keyword and URL fields auto-fill in the form below
+4. Review and click **Add Keyword**
+
+### Adding Keywords Manually
+
+1. Enter a keyword or phrase
+2. Enter the target URL (must be an absolute URL starting with `http://` or `https://`)
+3. Optionally override nofollow, new-tab, or max replacements for this specific mapping
+4. Click **Add Keyword**
+
+### Scan per Keyword
+
+Every keyword row in the table has a **Scan** button:
+
+1. Click **Scan** — the plugin searches published posts/pages matching that keyword
+2. Results appear in an expandable panel below the row
+3. Click **Use this URL** next to any result — the keyword's target URL updates instantly
+4. The panel closes automatically after updating
+
+### Suggest Keywords from Content
+
+At the bottom of the page, expand **Suggest Keywords from Content**:
+
+1. Click **Scan Post Titles**
+2. A paginated table shows all published posts/pages
+3. Each row shows: title (potential keyword), type, URL, and mapped status
+4. Already-mapped titles are flagged — available titles have an **Add as Keyword** button
+5. Click the button — the form pre-fills and scrolls into view
+
+### Global Settings
 
 | Setting | Default | Description |
 |---|---|---|
@@ -43,13 +82,6 @@ Navigate to **Settings > FPP Interlinking** and configure:
 | Open in new tab | On | Adds `target="_blank"` with `noopener noreferrer` |
 | Case sensitive | Off | When off, "WordPress" matches "wordpress" |
 | Excluded posts/pages | — | Comma-separated post/page IDs to skip |
-
-### Adding Keywords
-
-1. Enter a keyword or phrase
-2. Enter the target URL (must be an absolute URL starting with `http://` or `https://`)
-3. Optionally override nofollow, new-tab, or max replacements for this specific mapping
-4. Click **Add Keyword**
 
 ### How Replacement Works
 
@@ -81,14 +113,22 @@ fpp-interlinking/
 │   ├── class-fpp-interlinking-activator.php      # DB table creation + default options
 │   ├── class-fpp-interlinking-deactivator.php    # Cache cleanup
 │   ├── class-fpp-interlinking-db.php             # CRUD operations + duplicate detection
-│   ├── class-fpp-interlinking-admin.php          # Admin page, AJAX handlers, assets
+│   ├── class-fpp-interlinking-admin.php          # Admin page, AJAX handlers (8 endpoints), assets
 │   └── class-fpp-interlinking-replacer.php       # Front-end content filter
 └── assets/
-    ├── js/fpp-interlinking-admin.js              # Admin UI logic
+    ├── js/fpp-interlinking-admin.js              # Admin UI logic (FPP object, 20+ methods)
     └── css/fpp-interlinking-admin.css             # Admin styles
 ```
 
 ## Changelog
+
+### 1.2.0
+- Quick-Add Post Search with live autocomplete
+- Scan per Keyword — find matching posts and assign URL in one click
+- Suggest Keywords from Content — paginated title scanner with one-click add
+- Already-mapped detection in suggestions
+- Highlight animation on form pre-fill
+- Performance: `no_found_rows` on scan/search endpoints
 
 ### 1.1.0
 - Self-link prevention

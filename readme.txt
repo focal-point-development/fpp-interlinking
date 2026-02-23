@@ -3,12 +3,12 @@ Contributors: fpp
 Tags: interlinking, internal links, seo, keywords, auto link
 Requires at least: 5.8
 Tested up to: 6.7
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 Requires PHP: 7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automate SEO internal linking by mapping keywords to target URLs with full control over link behavior.
+Automate SEO internal linking by mapping keywords to target URLs with full control over link behavior. Scan your content to discover interlinking opportunities.
 
 == Description ==
 
@@ -23,6 +23,9 @@ FPP Interlinking automatically replaces configured keywords in your posts and pa
 **Key Features**
 
 * **Keyword-to-URL mapping** - Define unlimited keyword/phrase mappings, each pointing to a target URL.
+* **Quick-Add Post Search** - Type to search your existing posts and pages, then click to auto-fill the keyword and URL fields instantly.
+* **Scan per Keyword** - Click "Scan" on any keyword row to find matching posts/pages and assign a target URL in one click.
+* **Suggest Keywords from Content** - Scan all published post/page titles to discover interlinking opportunities. One-click "Add as Keyword" pre-fills the form.
 * **Global settings** - Set default max replacements per keyword, nofollow, new-tab behavior, and case sensitivity across all mappings.
 * **Per-keyword overrides** - Override the global nofollow, new-tab, and max-replacements settings on individual mappings.
 * **Self-link prevention** - Keywords are automatically skipped when the target URL matches the current post, avoiding circular links.
@@ -31,7 +34,7 @@ FPP Interlinking automatically replaces configured keywords in your posts and pa
 * **Longest-match-first** - Keywords are sorted by length before processing, so "WordPress SEO" is matched before "WordPress".
 * **Post/page exclusions** - Exclude specific posts or pages by ID.
 * **Transient caching** - Active keywords are cached for one hour to minimize database queries on every page load.
-* **AJAX admin interface** - Add, edit, delete, and toggle keywords without page reloads.
+* **AJAX admin interface** - Add, edit, delete, toggle, and scan keywords without page reloads.
 * **Settings link on Plugins page** - Quick access to configuration from the Plugins list.
 * **Multisite compatible** - Clean uninstall removes data from every site in a multisite network.
 * **i18n ready** - All strings are wrapped for translation.
@@ -70,6 +73,18 @@ No. Self-link prevention compares each keyword's target URL against the current 
 
 By default, matching is case-insensitive ("WordPress" matches "wordpress"). You can enable case-sensitive matching in the global settings.
 
+= How does Quick-Add Post Search work? =
+
+Type at least 2 characters in the search field. The plugin searches your published posts and pages by title in real time. Click a result to auto-fill the keyword and URL fields in the form below.
+
+= How does Scan per Keyword work? =
+
+Click the "Scan" button on any keyword row. The plugin searches published posts/pages whose title contains that keyword. Each result has a "Use this URL" button that updates the keyword's target URL in one click.
+
+= How does Suggest Keywords from Content work? =
+
+Open the "Suggest Keywords from Content" section and click "Scan Post Titles." The plugin lists all published posts and pages with their titles as potential keywords. Posts already mapped are flagged. Click "Add as Keyword" to pre-fill the form.
+
 = Does it work with custom post types? =
 
 Yes. The plugin hooks into the `the_content` filter, which fires for any post type that renders content through that filter.
@@ -84,11 +99,23 @@ Yes. On uninstall, data is cleaned up for every site in the network.
 
 == Screenshots ==
 
-1. Global settings panel with max replacements, nofollow, new-tab, case sensitivity, and post exclusion options.
-2. Add/edit keyword mapping form with per-keyword override options.
-3. Keyword mappings table with inline edit, toggle, and delete actions.
+1. Quick-Add Post Search with live autocomplete dropdown.
+2. Global settings panel with max replacements, nofollow, new-tab, case sensitivity, and post exclusion options.
+3. Add/edit keyword mapping form with per-keyword override options.
+4. Keyword mappings table with Scan, Edit, Disable, and Delete actions.
+5. Scan results panel showing matching posts with "Use this URL" buttons.
+6. Suggest Keywords section with paginated post titles and "Add as Keyword" buttons.
 
 == Changelog ==
+
+= 1.2.0 =
+* Added Quick-Add Post Search - live autocomplete to find posts/pages and auto-fill keyword + URL fields.
+* Added Scan per Keyword - click "Scan" on any keyword row to discover matching posts and assign a target URL in one click.
+* Added Suggest Keywords from Content - paginated scanner that lists all published titles as potential keyword mappings.
+* Already-mapped titles are flagged in the suggestions table to avoid duplicates.
+* Scan results panel uses expandable rows with a blue accent border for clear visual hierarchy.
+* Added highlight animation when the form is pre-filled by search, scan, or suggestion actions.
+* Performance: scan and search endpoints use `no_found_rows` to skip unnecessary count queries.
 
 = 1.1.0 =
 * Added self-link prevention - keywords are skipped when the target URL matches the current post.
@@ -109,6 +136,9 @@ Yes. On uninstall, data is cleaned up for every site in the network.
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Major feature update: Quick-Add Post Search, Scan per Keyword, and Suggest Keywords from Content. Discover interlinking opportunities across your site with one click.
 
 = 1.1.0 =
 Adds self-link prevention, duplicate detection, input validation, multisite uninstall, and i18n support. Recommended update.

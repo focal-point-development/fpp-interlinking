@@ -18,11 +18,11 @@
 
 /* Table column widths */
 .wp-list-table .column-keyword {
-	width: 18%;
+	width: 16%;
 }
 
 .wp-list-table .column-url {
-	width: 28%;
+	width: 24%;
 	word-break: break-all;
 }
 
@@ -30,12 +30,12 @@
 .wp-list-table .column-newtab,
 .wp-list-table .column-max,
 .wp-list-table .column-active {
-	width: 8%;
+	width: 7%;
 	text-align: center;
 }
 
 .wp-list-table .column-actions {
-	width: 22%;
+	width: 25%;
 }
 
 /* Status badges */
@@ -68,4 +68,204 @@
 
 #fpp-notices .notice {
 	margin-left: 0;
+}
+
+/* ── Quick-Add Post Search ──────────────────────────────────────── */
+
+.fpp-quick-add-section {
+	margin-bottom: 20px;
+}
+
+.fpp-quick-add-section .description {
+	margin-bottom: 8px;
+}
+
+.fpp-search-wrapper {
+	position: relative;
+	max-width: 500px;
+}
+
+.fpp-search-dropdown {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	background: #fff;
+	border: 1px solid #8c8f94;
+	border-top: none;
+	border-radius: 0 0 4px 4px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+	max-height: 340px;
+	overflow-y: auto;
+}
+
+.fpp-search-result-item {
+	padding: 10px 14px;
+	cursor: pointer;
+	border-bottom: 1px solid #f0f0f1;
+	transition: background-color 0.15s;
+}
+
+.fpp-search-result-item:last-child {
+	border-bottom: none;
+}
+
+.fpp-search-result-item:hover {
+	background: #f0f7fc;
+}
+
+.fpp-search-result-item strong {
+	display: inline;
+	font-size: 13px;
+}
+
+.fpp-search-result-item small {
+	color: #646970;
+	word-break: break-all;
+	font-size: 12px;
+}
+
+.fpp-search-type {
+	color: #646970;
+	font-size: 12px;
+	font-weight: normal;
+}
+
+.fpp-search-no-results {
+	padding: 14px;
+	color: #646970;
+	font-style: italic;
+	text-align: center;
+}
+
+/* ── Scan Results Panel (per keyword row) ───────────────────────── */
+
+.fpp-scan-results-row td {
+	background: #f6f7f7;
+	padding: 14px 18px;
+	border-left: 3px solid #2271b1;
+}
+
+.fpp-scan-results-container {
+	max-height: 350px;
+	overflow-y: auto;
+}
+
+.fpp-scan-results-loading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: #646970;
+}
+
+.fpp-scan-results-loading .spinner {
+	float: none;
+	margin: 0;
+}
+
+.fpp-scan-summary {
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: #1d2327;
+}
+
+.fpp-scan-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.fpp-scan-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 0;
+	border-bottom: 1px solid #e2e4e7;
+	flex-wrap: wrap;
+}
+
+.fpp-scan-item:last-child {
+	border-bottom: none;
+}
+
+.fpp-scan-title {
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.fpp-scan-type {
+	color: #646970;
+	font-size: 12px;
+}
+
+.fpp-scan-url {
+	color: #2271b1;
+	font-size: 12px;
+	word-break: break-all;
+	flex: 1;
+}
+
+.fpp-scan-empty,
+.fpp-scan-error {
+	color: #646970;
+	font-style: italic;
+	padding: 4px 0;
+}
+
+/* ── Suggest Keywords from Content ──────────────────────────────── */
+
+.fpp-suggest-section .description {
+	margin-bottom: 12px;
+}
+
+#fpp-suggestions-table .column-sg-title {
+	width: 25%;
+}
+
+#fpp-suggestions-table .column-sg-type {
+	width: 10%;
+	text-align: center;
+}
+
+#fpp-suggestions-table .column-sg-url {
+	width: 30%;
+	word-break: break-all;
+}
+
+#fpp-suggestions-table .column-sg-status {
+	width: 12%;
+	text-align: center;
+}
+
+#fpp-suggestions-table .column-sg-actions {
+	width: 18%;
+}
+
+#fpp-suggestions-pagination {
+	padding: 10px 0;
+}
+
+#fpp-suggestions-pagination .tablenav-pages {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.fpp-suggestions-info {
+	color: #646970;
+	font-size: 13px;
+	flex: 1;
+}
+
+/* ── Shared: Highlight animation ────────────────────────────────── */
+
+.fpp-highlight {
+	animation: fpp-pulse 0.5s ease-in-out 3;
+	border-radius: 4px;
+}
+
+@keyframes fpp-pulse {
+	0%, 100% { background-color: transparent; }
+	50% { background-color: #fcf9e8; }
 }

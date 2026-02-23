@@ -3,7 +3,7 @@
  * Plugin Name:       FPP Interlinking
  * Plugin URI:        https://developer.wordpress.org/plugins/
  * Description:       Automate SEO internal linking by mapping keywords to target URLs. Configured keywords are automatically replaced with anchor links in posts and pages, with support for per-keyword overrides, nofollow/new-tab settings, case sensitivity, post exclusions, and self-link prevention.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            FPP
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin constants.
  */
-define( 'FPP_INTERLINKING_VERSION', '1.1.0' );
+define( 'FPP_INTERLINKING_VERSION', '1.2.0' );
 define( 'FPP_INTERLINKING_DB_VERSION', '1.1.0' );
 define( 'FPP_INTERLINKING_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
