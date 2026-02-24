@@ -136,7 +136,7 @@ class FPP_Interlinking_DB {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				error_log( sprintf(
-					'[FPP Interlinking] insert_keyword failed: %s',
+					'[WP Interlinking] insert_keyword failed: %s',
 					$wpdb->last_error
 				) );
 			}
@@ -182,7 +182,7 @@ class FPP_Interlinking_DB {
 		if ( false === $result && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( sprintf(
-				'[FPP Interlinking] update_keyword(%d) failed: %s',
+				'[WP Interlinking] update_keyword(%d) failed: %s',
 				$id,
 				$wpdb->last_error
 			) );
@@ -208,7 +208,7 @@ class FPP_Interlinking_DB {
 		if ( false === $result && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( sprintf(
-				'[FPP Interlinking] delete_keyword(%d) failed: %s',
+				'[WP Interlinking] delete_keyword(%d) failed: %s',
 				$id,
 				$wpdb->last_error
 			) );
@@ -241,7 +241,7 @@ class FPP_Interlinking_DB {
 		if ( false === $result && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( sprintf(
-				'[FPP Interlinking] toggle_keyword(%d) failed: %s',
+				'[WP Interlinking] toggle_keyword(%d) failed: %s',
 				$id,
 				$wpdb->last_error
 			) );

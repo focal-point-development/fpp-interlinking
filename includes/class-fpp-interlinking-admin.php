@@ -36,6 +36,15 @@ class FPP_Interlinking_Admin {
 		add_action( 'wp_ajax_fpp_interlinking_search_posts', array( $this, 'ajax_search_posts' ) );
 		add_action( 'wp_ajax_fpp_interlinking_scan_keyword', array( $this, 'ajax_scan_keyword' ) );
 		add_action( 'wp_ajax_fpp_interlinking_suggest_keywords', array( $this, 'ajax_suggest_keywords' ) );
+
+		// v2.0.0: AI-powered endpoints.
+		add_action( 'wp_ajax_fpp_interlinking_save_ai_settings', array( $this, 'ajax_save_ai_settings' ) );
+		add_action( 'wp_ajax_fpp_interlinking_test_ai_connection', array( $this, 'ajax_test_ai_connection' ) );
+		add_action( 'wp_ajax_fpp_interlinking_ai_extract_keywords', array( $this, 'ajax_ai_extract_keywords' ) );
+		add_action( 'wp_ajax_fpp_interlinking_ai_score_relevance', array( $this, 'ajax_ai_score_relevance' ) );
+		add_action( 'wp_ajax_fpp_interlinking_ai_content_gaps', array( $this, 'ajax_ai_content_gaps' ) );
+		add_action( 'wp_ajax_fpp_interlinking_ai_auto_generate', array( $this, 'ajax_ai_auto_generate' ) );
+		add_action( 'wp_ajax_fpp_interlinking_ai_add_mapping', array( $this, 'ajax_ai_add_mapping' ) );
 	}
 
 	/**
@@ -45,8 +54,8 @@ class FPP_Interlinking_Admin {
 	 */
 	public function add_admin_menu() {
 		add_options_page(
-			__( 'FPP Interlinking', 'fpp-interlinking' ),
-			__( 'FPP Interlinking', 'fpp-interlinking' ),
+			__( 'WP Interlinking', 'fpp-interlinking' ),
+			__( 'WP Interlinking', 'fpp-interlinking' ),
 			'manage_options',
 			'fpp-interlinking',
 			array( $this, 'render_admin_page' )
@@ -104,6 +113,22 @@ class FPP_Interlinking_Admin {
 				'page_info'        => esc_html__( 'Page %1$d of %2$d (%3$d total)', 'fpp-interlinking' ),
 				// Quick-add search.
 				'no_posts_found'   => esc_html__( 'No posts found.', 'fpp-interlinking' ),
+				// AI features.
+				'ai_processing'          => esc_html__( 'AI is processing...', 'fpp-interlinking' ),
+				'ai_extract_btn'         => esc_html__( 'Extract Keywords', 'fpp-interlinking' ),
+				'ai_score_btn'           => esc_html__( 'Score Relevance', 'fpp-interlinking' ),
+				'ai_gaps_btn'            => esc_html__( 'Analyse Gaps', 'fpp-interlinking' ),
+				'ai_generate_btn'        => esc_html__( 'Auto-Generate', 'fpp-interlinking' ),
+				'ai_no_results'          => esc_html__( 'No results found. Try again with different content.', 'fpp-interlinking' ),
+				'ai_add_mapping'         => esc_html__( 'Add Mapping', 'fpp-interlinking' ),
+				'ai_add_all'             => esc_html__( 'Add All', 'fpp-interlinking' ),
+				'ai_added'               => esc_html__( 'Added!', 'fpp-interlinking' ),
+				'ai_connection_ok'       => esc_html__( 'Connection successful!', 'fpp-interlinking' ),
+				'ai_select_post'         => esc_html__( 'Select a post to analyse', 'fpp-interlinking' ),
+				'ai_enter_keyword'       => esc_html__( 'Enter a keyword first', 'fpp-interlinking' ),
+				'ai_analysed_info'       => esc_html__( 'Analysed %1$d of %2$d posts', 'fpp-interlinking' ),
+				'ai_confidence'          => esc_html__( 'Confidence', 'fpp-interlinking' ),
+				'ai_relevance'           => esc_html__( 'Relevance', 'fpp-interlinking' ),
 			),
 		) );
 	}
@@ -360,6 +385,218 @@ class FPP_Interlinking_Admin {
 								<button type="button" id="fpp-suggestions-next" class="button button-small"><?php esc_html_e( 'Next', 'fpp-interlinking' ); ?> &raquo;</button>
 							</div>
 						</div>
+					</div>
+				</div>
+			</div>
+
+			<hr />
+
+			<!-- AI Settings -->
+			<div class="fpp-section fpp-ai-settings-section">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-settings">
+					<span class="dashicons dashicons-admin-generic"></span>
+					<?php esc_html_e( 'AI Settings', 'fpp-interlinking' ); ?>
+					<span class="dashicons dashicons-arrow-down-alt2"></span>
+				</h2>
+				<div class="fpp-section-content" id="fpp-ai-settings-content" style="display:none;">
+					<table class="form-table">
+						<tr>
+							<th><label for="fpp-ai-provider"><?php esc_html_e( 'AI Provider', 'fpp-interlinking' ); ?></label></th>
+							<td>
+								<select id="fpp-ai-provider">
+									<option value="openai" <?php selected( FPP_Interlinking_AI::get_provider(), 'openai' ); ?>><?php esc_html_e( 'OpenAI', 'fpp-interlinking' ); ?></option>
+									<option value="anthropic" <?php selected( FPP_Interlinking_AI::get_provider(), 'anthropic' ); ?>><?php esc_html_e( 'Anthropic (Claude)', 'fpp-interlinking' ); ?></option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="fpp-ai-api-key"><?php esc_html_e( 'API Key', 'fpp-interlinking' ); ?></label></th>
+							<td>
+								<?php $masked = FPP_Interlinking_AI::get_masked_key(); ?>
+								<input type="password" id="fpp-ai-api-key" class="regular-text"
+									placeholder="<?php echo $masked ? esc_attr( $masked ) : esc_attr__( 'Enter your API key', 'fpp-interlinking' ); ?>"
+									autocomplete="off" />
+								<p class="description">
+									<?php if ( $masked ) : ?>
+										<?php printf( esc_html__( 'Current key: %s — Leave blank to keep existing key.', 'fpp-interlinking' ), '<code>' . esc_html( $masked ) . '</code>' ); ?>
+									<?php else : ?>
+										<?php esc_html_e( 'Enter your OpenAI or Anthropic API key. It will be stored encrypted.', 'fpp-interlinking' ); ?>
+									<?php endif; ?>
+								</p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="fpp-ai-model"><?php esc_html_e( 'Model', 'fpp-interlinking' ); ?></label></th>
+							<td>
+								<input type="text" id="fpp-ai-model" class="regular-text"
+									value="<?php echo esc_attr( FPP_Interlinking_AI::get_model() ); ?>"
+									placeholder="gpt-4o-mini" />
+								<p class="description"><?php esc_html_e( 'OpenAI: gpt-4o-mini, gpt-4o, gpt-4-turbo. Anthropic: claude-sonnet-4-20250514, claude-haiku-4-5-20251001.', 'fpp-interlinking' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="fpp-ai-max-tokens"><?php esc_html_e( 'Max Tokens', 'fpp-interlinking' ); ?></label></th>
+							<td>
+								<input type="number" id="fpp-ai-max-tokens" class="small-text" min="500" max="8000"
+									value="<?php echo esc_attr( FPP_Interlinking_AI::get_max_tokens() ); ?>" />
+								<p class="description"><?php esc_html_e( 'Maximum tokens for AI responses (500-8000). Higher values cost more but allow richer analysis.', 'fpp-interlinking' ); ?></p>
+							</td>
+						</tr>
+					</table>
+					<p>
+						<button type="button" id="fpp-save-ai-settings" class="button button-primary"><?php esc_html_e( 'Save AI Settings', 'fpp-interlinking' ); ?></button>
+						<button type="button" id="fpp-test-ai-connection" class="button"><?php esc_html_e( 'Test Connection', 'fpp-interlinking' ); ?></button>
+						<span id="fpp-ai-connection-status"></span>
+					</p>
+				</div>
+			</div>
+
+			<hr />
+
+			<!-- AI Keyword Extraction -->
+			<div class="fpp-section fpp-ai-section fpp-ai-extract-section">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-extract">
+					<span class="dashicons dashicons-lightbulb"></span>
+					<?php esc_html_e( 'AI Keyword Extraction', 'fpp-interlinking' ); ?>
+					<span class="dashicons dashicons-arrow-down-alt2"></span>
+				</h2>
+				<div class="fpp-section-content" id="fpp-ai-extract-content" style="display:none;">
+					<p class="description"><?php esc_html_e( 'Select a post or page to analyse its content and extract SEO keywords for interlinking.', 'fpp-interlinking' ); ?></p>
+					<div class="fpp-ai-controls">
+						<div class="fpp-search-wrapper">
+							<input type="text" id="fpp-ai-extract-search" class="regular-text"
+								placeholder="<?php esc_attr_e( 'Search for a post to analyse...', 'fpp-interlinking' ); ?>"
+								autocomplete="off" />
+							<div id="fpp-ai-extract-search-results" class="fpp-search-dropdown" style="display:none;"></div>
+						</div>
+						<input type="hidden" id="fpp-ai-extract-post-id" value="" />
+						<span id="fpp-ai-extract-selected" class="fpp-ai-selected-post"></span>
+						<button type="button" id="fpp-ai-extract-btn" class="button button-primary" disabled>
+							<span class="dashicons dashicons-lightbulb"></span>
+							<?php esc_html_e( 'Extract Keywords', 'fpp-interlinking' ); ?>
+						</button>
+					</div>
+					<div id="fpp-ai-extract-results" class="fpp-ai-results" style="display:none;">
+						<table class="wp-list-table widefat fixed striped">
+							<thead>
+								<tr>
+									<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-relevance"><?php esc_html_e( 'Relevance', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+								</tr>
+							</thead>
+							<tbody id="fpp-ai-extract-tbody"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+
+			<hr />
+
+			<!-- AI Relevance Scoring -->
+			<div class="fpp-section fpp-ai-section fpp-ai-score-section">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-score">
+					<span class="dashicons dashicons-chart-bar"></span>
+					<?php esc_html_e( 'AI Relevance Scoring', 'fpp-interlinking' ); ?>
+					<span class="dashicons dashicons-arrow-down-alt2"></span>
+				</h2>
+				<div class="fpp-section-content" id="fpp-ai-score-content" style="display:none;">
+					<p class="description"><?php esc_html_e( 'Enter a keyword to find and score the most relevant pages to link to.', 'fpp-interlinking' ); ?></p>
+					<div class="fpp-ai-controls">
+						<input type="text" id="fpp-ai-score-keyword" class="regular-text"
+							placeholder="<?php esc_attr_e( 'Enter keyword to score...', 'fpp-interlinking' ); ?>" />
+						<button type="button" id="fpp-ai-score-btn" class="button button-primary">
+							<span class="dashicons dashicons-chart-bar"></span>
+							<?php esc_html_e( 'Score Relevance', 'fpp-interlinking' ); ?>
+						</button>
+					</div>
+					<div id="fpp-ai-score-results" class="fpp-ai-results" style="display:none;">
+						<table class="wp-list-table widefat fixed striped">
+							<thead>
+								<tr>
+									<th class="column-ai-title"><?php esc_html_e( 'Page', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-url"><?php esc_html_e( 'URL', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-score"><?php esc_html_e( 'Score', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-reason"><?php esc_html_e( 'Reason', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+								</tr>
+							</thead>
+							<tbody id="fpp-ai-score-tbody"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+
+			<hr />
+
+			<!-- AI Content Gap Analysis -->
+			<div class="fpp-section fpp-ai-section fpp-ai-gaps-section">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-gaps">
+					<span class="dashicons dashicons-search"></span>
+					<?php esc_html_e( 'AI Content Gap Analysis', 'fpp-interlinking' ); ?>
+					<span class="dashicons dashicons-arrow-down-alt2"></span>
+				</h2>
+				<div class="fpp-section-content" id="fpp-ai-gaps-content" style="display:none;">
+					<p class="description"><?php esc_html_e( 'Analyse your published content to discover posts that should link to each other but currently don\'t.', 'fpp-interlinking' ); ?></p>
+					<div class="fpp-ai-controls">
+						<button type="button" id="fpp-ai-gaps-btn" class="button button-primary">
+							<span class="dashicons dashicons-search"></span>
+							<?php esc_html_e( 'Analyse Content Gaps', 'fpp-interlinking' ); ?>
+						</button>
+						<span id="fpp-ai-gaps-status" class="fpp-ai-status"></span>
+					</div>
+					<div id="fpp-ai-gaps-results" class="fpp-ai-results" style="display:none;">
+						<table class="wp-list-table widefat fixed striped">
+							<thead>
+								<tr>
+									<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-source"><?php esc_html_e( 'Source Post', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-target"><?php esc_html_e( 'Target Post', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-confidence"><?php esc_html_e( 'Confidence', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-reason"><?php esc_html_e( 'Reason', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+								</tr>
+							</thead>
+							<tbody id="fpp-ai-gaps-tbody"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+
+			<hr />
+
+			<!-- AI Auto-Generate Mappings -->
+			<div class="fpp-section fpp-ai-section fpp-ai-generate-section">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-generate">
+					<span class="dashicons dashicons-update"></span>
+					<?php esc_html_e( 'AI Auto-Generate Mappings', 'fpp-interlinking' ); ?>
+					<span class="dashicons dashicons-arrow-down-alt2"></span>
+				</h2>
+				<div class="fpp-section-content" id="fpp-ai-generate-content" style="display:none;">
+					<p class="description"><?php esc_html_e( 'Let AI scan your content and automatically propose keyword-to-URL mappings for a complete interlinking strategy.', 'fpp-interlinking' ); ?></p>
+					<div class="fpp-ai-controls">
+						<button type="button" id="fpp-ai-generate-btn" class="button button-primary">
+							<span class="dashicons dashicons-update"></span>
+							<?php esc_html_e( 'Auto-Generate Mappings', 'fpp-interlinking' ); ?>
+						</button>
+						<button type="button" id="fpp-ai-add-all-btn" class="button" style="display:none;">
+							<?php esc_html_e( 'Add All Mappings', 'fpp-interlinking' ); ?>
+						</button>
+						<span id="fpp-ai-generate-status" class="fpp-ai-status"></span>
+					</div>
+					<div id="fpp-ai-generate-results" class="fpp-ai-results" style="display:none;">
+						<table class="wp-list-table widefat fixed striped">
+							<thead>
+								<tr>
+									<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-url"><?php esc_html_e( 'Target URL', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-target"><?php esc_html_e( 'Target Page', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-confidence"><?php esc_html_e( 'Confidence', 'fpp-interlinking' ); ?></th>
+									<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+								</tr>
+							</thead>
+							<tbody id="fpp-ai-generate-tbody"></tbody>
+						</table>
 					</div>
 				</div>
 			</div>
@@ -742,5 +979,270 @@ class FPP_Interlinking_Admin {
 			'total_pages' => $query->max_num_pages,
 			'total_posts' => $query->found_posts,
 		) );
+	}
+
+	/* ── v2.0.0: AI-Powered AJAX Handlers ────────────────────────────── */
+
+	/**
+	 * AJAX: Save AI settings (provider, model, API key, max tokens).
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_save_ai_settings() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$provider   = isset( $_POST['provider'] ) ? sanitize_text_field( wp_unslash( $_POST['provider'] ) ) : 'openai';
+		$model      = isset( $_POST['model'] ) ? sanitize_text_field( wp_unslash( $_POST['model'] ) ) : '';
+		$api_key    = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
+		$max_tokens = isset( $_POST['max_tokens'] ) ? absint( $_POST['max_tokens'] ) : 2000;
+
+		// Validate provider.
+		if ( ! in_array( $provider, array( 'openai', 'anthropic' ), true ) ) {
+			$provider = 'openai';
+		}
+
+		// Clamp max tokens.
+		$max_tokens = max( 500, min( $max_tokens, 8000 ) );
+
+		update_option( FPP_Interlinking_AI::OPTION_PROVIDER, $provider, false );
+		update_option( FPP_Interlinking_AI::OPTION_MAX_TOKENS, $max_tokens, false );
+
+		if ( ! empty( $model ) ) {
+			update_option( FPP_Interlinking_AI::OPTION_MODEL, $model, false );
+		}
+
+		// Only update API key if a new one was provided.
+		if ( ! empty( $api_key ) ) {
+			FPP_Interlinking_AI::save_api_key( $api_key );
+		}
+
+		wp_send_json_success( array(
+			'message'    => __( 'AI settings saved.', 'fpp-interlinking' ),
+			'masked_key' => FPP_Interlinking_AI::get_masked_key(),
+		) );
+	}
+
+	/**
+	 * AJAX: Test the AI API connection.
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_test_ai_connection() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_AI::test_connection();
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success( array( 'message' => __( 'Connection successful! Your AI provider is working.', 'fpp-interlinking' ) ) );
+	}
+
+	/**
+	 * AJAX: Extract keywords from a post using AI.
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_ai_extract_keywords() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+
+		if ( ! $post_id ) {
+			wp_send_json_error( array( 'message' => __( 'Please select a post to analyse.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_AI::extract_keywords( $post_id );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		// Check which keywords already exist.
+		$existing = FPP_Interlinking_DB::get_all_keywords();
+		$existing_map = array();
+		foreach ( $existing as $ek ) {
+			$existing_map[ strtolower( $ek['keyword'] ) ] = true;
+		}
+
+		foreach ( $result as &$kw ) {
+			$kw['already_exists'] = isset( $existing_map[ strtolower( $kw['keyword'] ?? '' ) ] );
+		}
+		unset( $kw );
+
+		$post = get_post( $post_id );
+		wp_send_json_success( array(
+			'keywords'   => $result,
+			'post_title' => $post ? $post->post_title : '',
+			'post_url'   => get_permalink( $post_id ),
+		) );
+	}
+
+	/**
+	 * AJAX: Score relevance of pages for a keyword using AI.
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_ai_score_relevance() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$keyword = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
+
+		if ( empty( $keyword ) ) {
+			wp_send_json_error( array( 'message' => __( 'Keyword is required.', 'fpp-interlinking' ) ) );
+		}
+
+		// Find candidate posts matching the keyword.
+		$query = new WP_Query( array(
+			's'                => $keyword,
+			'post_type'        => array( 'post', 'page' ),
+			'post_status'      => 'publish',
+			'posts_per_page'   => 15,
+			'orderby'          => 'relevance',
+			'order'            => 'DESC',
+			'no_found_rows'    => true,
+		) );
+
+		$candidates = array();
+		if ( $query->have_posts() ) {
+			while ( $query->have_posts() ) {
+				$query->the_post();
+				$candidates[] = array(
+					'id'      => get_the_ID(),
+					'title'   => get_the_title(),
+					'url'     => get_permalink(),
+					'excerpt' => wp_strip_all_tags( get_the_excerpt() ),
+				);
+			}
+			wp_reset_postdata();
+		}
+
+		if ( empty( $candidates ) ) {
+			wp_send_json_error( array( 'message' => __( 'No matching posts found for this keyword.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_AI::score_relevance( $keyword, $candidates );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success( array(
+			'keyword' => $keyword,
+			'scores'  => $result,
+		) );
+	}
+
+	/**
+	 * AJAX: Analyse content gaps using AI.
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_ai_content_gaps() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$offset = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
+
+		$result = FPP_Interlinking_AI::analyse_content_gaps( 20, $offset );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Auto-generate keyword mappings using AI.
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_ai_auto_generate() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$offset = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
+
+		$result = FPP_Interlinking_AI::auto_generate_mappings( 20, $offset );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Add a single AI-suggested mapping to the keywords table.
+	 *
+	 * @since 2.0.0
+	 */
+	public function ajax_ai_add_mapping() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$keyword    = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
+		$target_url = isset( $_POST['target_url'] ) ? esc_url_raw( wp_unslash( $_POST['target_url'] ) ) : '';
+
+		if ( empty( $keyword ) || empty( $target_url ) ) {
+			wp_send_json_error( array( 'message' => __( 'Keyword and URL are required.', 'fpp-interlinking' ) ) );
+		}
+
+		if ( FPP_Interlinking_DB::keyword_exists( $keyword ) ) {
+			wp_send_json_error( array( 'message' => __( 'This keyword already exists.', 'fpp-interlinking' ) ) );
+		}
+
+		$id = FPP_Interlinking_DB::insert_keyword( array(
+			'keyword'          => $keyword,
+			'target_url'       => $target_url,
+			'nofollow'         => 0,
+			'new_tab'          => 1,
+			'max_replacements' => 0,
+		) );
+
+		if ( $id ) {
+			delete_transient( 'fpp_interlinking_keywords_cache' );
+			wp_send_json_success( array(
+				'message' => sprintf( __( 'Keyword "%s" added successfully.', 'fpp-interlinking' ), $keyword ),
+				'keyword' => array(
+					'id'               => $id,
+					'keyword'          => $keyword,
+					'target_url'       => $target_url,
+					'nofollow'         => 0,
+					'new_tab'          => 1,
+					'max_replacements' => 0,
+					'is_active'        => 1,
+				),
+			) );
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Failed to add keyword.', 'fpp-interlinking' ) ) );
+		}
 	}
 }

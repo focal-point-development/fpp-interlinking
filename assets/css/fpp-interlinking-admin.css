@@ -269,3 +269,151 @@
 	0%, 100% { background-color: transparent; }
 	50% { background-color: #fcf9e8; }
 }
+
+/* ── AI Sections ────────────────────────────────────────────────── */
+
+.fpp-ai-section .fpp-section-toggle,
+.fpp-ai-settings-section .fpp-section-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.fpp-ai-section .fpp-section-toggle .dashicons:first-child,
+.fpp-ai-settings-section .fpp-section-toggle .dashicons:first-child {
+	color: #8B5CF6;
+	font-size: 22px;
+	width: 22px;
+	height: 22px;
+}
+
+.fpp-ai-controls {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin: 12px 0;
+}
+
+.fpp-ai-controls .fpp-search-wrapper {
+	flex: 0 1 400px;
+}
+
+.fpp-ai-selected-post {
+	display: inline-block;
+	padding: 4px 10px;
+	background: #f0f7fc;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	font-size: 13px;
+	max-width: 400px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.fpp-ai-selected-post:empty {
+	display: none;
+}
+
+.fpp-ai-status {
+	display: inline-block;
+	color: #646970;
+	font-size: 13px;
+	margin-left: 8px;
+}
+
+.fpp-ai-results {
+	margin-top: 16px;
+}
+
+/* AI score badges */
+.fpp-ai-score {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 12px;
+	font-weight: 600;
+	font-size: 12px;
+}
+
+.fpp-score-high {
+	background: #d4edda;
+	color: #155724;
+}
+
+.fpp-score-medium {
+	background: #fff3cd;
+	color: #856404;
+}
+
+.fpp-score-low {
+	background: #f8d7da;
+	color: #721c24;
+}
+
+/* AI table column widths */
+.fpp-ai-results .column-ai-keyword {
+	width: 20%;
+}
+
+.fpp-ai-results .column-ai-url {
+	width: 22%;
+	word-break: break-all;
+}
+
+.fpp-ai-results .column-ai-relevance,
+.fpp-ai-results .column-ai-score,
+.fpp-ai-results .column-ai-confidence {
+	width: 10%;
+	text-align: center;
+}
+
+.fpp-ai-results .column-ai-reason {
+	width: 22%;
+	font-size: 12px;
+	color: #646970;
+}
+
+.fpp-ai-results .column-ai-source,
+.fpp-ai-results .column-ai-target {
+	width: 16%;
+}
+
+.fpp-ai-results .column-ai-title {
+	width: 20%;
+}
+
+.fpp-ai-results .column-ai-actions {
+	width: 12%;
+}
+
+/* AI buttons with icons */
+.fpp-ai-controls .button .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: text-bottom;
+	margin-right: 2px;
+}
+
+/* AI settings section */
+.fpp-ai-settings-section .form-table {
+	margin-top: 0;
+}
+
+#fpp-ai-connection-status {
+	display: inline-block;
+	margin-left: 8px;
+	vertical-align: middle;
+}
+
+#fpp-ai-connection-status .spinner {
+	float: none;
+	margin: 0;
+}
+
+/* AI processing spinner in buttons */
+.fpp-ai-controls .button .spinner {
+	float: none;
+	margin: 0;
+}

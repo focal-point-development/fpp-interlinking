@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name:       FPP Interlinking
+ * Plugin Name:       WP Interlinking
  * Plugin URI:        https://developer.wordpress.org/plugins/
- * Description:       Automate SEO internal linking by mapping keywords to target URLs. Configured keywords are automatically replaced with anchor links in posts and pages, with support for per-keyword overrides, nofollow/new-tab settings, case sensitivity, post exclusions, and self-link prevention.
- * Version:           1.2.0
+ * Description:       AI-powered SEO internal linking. Map keywords to URLs with automatic replacement, AI keyword extraction, relevance scoring, content gap analysis, and auto-generated interlinking strategies. Supports OpenAI and Anthropic.
+ * Version:           2.0.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            FPP
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin constants.
  */
-define( 'FPP_INTERLINKING_VERSION', '1.2.0' );
+define( 'FPP_INTERLINKING_VERSION', '2.0.0' );
 define( 'FPP_INTERLINKING_DB_VERSION', '1.1.0' );
 define( 'FPP_INTERLINKING_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -37,6 +37,7 @@ define( 'FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT', 100 );
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-activator.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-deactivator.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-db.php';
+require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-ai.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-admin.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-replacer.php';
 

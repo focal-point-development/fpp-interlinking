@@ -5,6 +5,7 @@
 
 		suggestionsPage: 1,
 		searchTimer: null,
+		aiSearchTimer: null,
 
 		init: function() {
 			this.bindEvents();
@@ -39,6 +40,54 @@
 			$('#fpp-suggestions-prev').on('click', function() { FPP.loadSuggestionsPage(FPP.suggestionsPage - 1); });
 			$('#fpp-suggestions-next').on('click', function() { FPP.loadSuggestionsPage(FPP.suggestionsPage + 1); });
 			$(document).on('click', '.fpp-add-suggestion', this.addSuggestion);
+
+			// AI Settings.
+			$('#fpp-toggle-ai-settings').on('click', function() {
+				$('#fpp-ai-settings-content').slideToggle(200);
+				$(this).find('.dashicons-arrow-down-alt2, .dashicons-arrow-up-alt2')
+					.toggleClass('dashicons-arrow-down-alt2 dashicons-arrow-up-alt2');
+			});
+			$('#fpp-save-ai-settings').on('click', FPP.saveAiSettings);
+			$('#fpp-test-ai-connection').on('click', FPP.testAiConnection);
+			$('#fpp-ai-provider').on('change', FPP.onProviderChange);
+
+			// AI Keyword Extraction.
+			$('#fpp-toggle-ai-extract').on('click', function() {
+				$('#fpp-ai-extract-content').slideToggle(200);
+				$(this).find('.dashicons-arrow-down-alt2, .dashicons-arrow-up-alt2')
+					.toggleClass('dashicons-arrow-down-alt2 dashicons-arrow-up-alt2');
+			});
+			$('#fpp-ai-extract-search').on('input', FPP.debounce(FPP.aiExtractSearch, 300));
+			$(document).on('click', '.fpp-ai-extract-result-item', FPP.aiExtractSelectPost);
+			$('#fpp-ai-extract-btn').on('click', FPP.aiExtractKeywords);
+
+			// AI Relevance Scoring.
+			$('#fpp-toggle-ai-score').on('click', function() {
+				$('#fpp-ai-score-content').slideToggle(200);
+				$(this).find('.dashicons-arrow-down-alt2, .dashicons-arrow-up-alt2')
+					.toggleClass('dashicons-arrow-down-alt2 dashicons-arrow-up-alt2');
+			});
+			$('#fpp-ai-score-btn').on('click', FPP.aiScoreRelevance);
+
+			// AI Content Gap Analysis.
+			$('#fpp-toggle-ai-gaps').on('click', function() {
+				$('#fpp-ai-gaps-content').slideToggle(200);
+				$(this).find('.dashicons-arrow-down-alt2, .dashicons-arrow-up-alt2')
+					.toggleClass('dashicons-arrow-down-alt2 dashicons-arrow-up-alt2');
+			});
+			$('#fpp-ai-gaps-btn').on('click', FPP.aiContentGaps);
+
+			// AI Auto-Generate Mappings.
+			$('#fpp-toggle-ai-generate').on('click', function() {
+				$('#fpp-ai-generate-content').slideToggle(200);
+				$(this).find('.dashicons-arrow-down-alt2, .dashicons-arrow-up-alt2')
+					.toggleClass('dashicons-arrow-down-alt2 dashicons-arrow-up-alt2');
+			});
+			$('#fpp-ai-generate-btn').on('click', FPP.aiAutoGenerate);
+			$('#fpp-ai-add-all-btn').on('click', FPP.aiAddAllMappings);
+
+			// AI add mapping buttons (delegated).
+			$(document).on('click', '.fpp-ai-add-mapping', FPP.aiAddMapping);
 		},
 
 		/* ── Utility ──────────────────────────────────────────────────── */
@@ -411,6 +460,7 @@
 		dismissSearchDropdown: function(e) {
 			if (!$(e.target).closest('.fpp-search-wrapper').length) {
 				$('#fpp-post-search-results').hide();
+				$('#fpp-ai-extract-search-results').hide();
 			}
 		},
 
@@ -620,6 +670,435 @@
 			}, 300);
 
 			FPP.highlightSection('.fpp-add-keyword-section');
+		},
+
+		/* ── AI Settings ─────────────────────────────────────────────── */
+
+		saveAiSettings: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			$btn.prop('disabled', true).text('Saving...');
+
+			$.post(fppInterlinking.ajax_url, {
+				action:     'fpp_interlinking_save_ai_settings',
+				nonce:      fppInterlinking.nonce,
+				provider:   $('#fpp-ai-provider').val(),
+				api_key:    $('#fpp-ai-api-key').val(),
+				model:      $('#fpp-ai-model').val(),
+				max_tokens: $('#fpp-ai-max-tokens').val()
+			}, function(response) {
+				$btn.prop('disabled', false).text('Save AI Settings');
+				if (response.success) {
+					FPP.showNotice('success', response.data.message);
+					$('#fpp-ai-api-key').val('').attr('placeholder', response.data.masked_key || '');
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false).text('Save AI Settings');
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		testAiConnection: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			var $status = $('#fpp-ai-connection-status');
+			$btn.prop('disabled', true);
+			$status.html('<span class="spinner is-active" style="float:none;margin:0 5px;"></span>').show();
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_test_ai_connection',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				$btn.prop('disabled', false);
+				if (response.success) {
+					$status.html('<span class="fpp-badge-active">' + FPP.escHtml(response.data.message) + '</span>');
+				} else {
+					$status.html('<span class="fpp-badge-inactive">' + FPP.escHtml(response.data.message) + '</span>');
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false);
+				$status.html('<span class="fpp-badge-inactive">' + FPP.escHtml(fppInterlinking.i18n.request_failed) + '</span>');
+			});
+		},
+
+		onProviderChange: function() {
+			var provider = $(this).val();
+			var defaults = { openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-4-20250514' };
+			var $model = $('#fpp-ai-model');
+			// Only update if current model belongs to the other provider.
+			var current = $model.val();
+			if ((provider === 'openai' && current.indexOf('claude') === 0) ||
+				(provider === 'anthropic' && current.indexOf('gpt') === 0) ||
+				!current) {
+				$model.val(defaults[provider] || '');
+			}
+		},
+
+		/* ── AI Keyword Extraction ───────────────────────────────────── */
+
+		aiExtractSearch: function() {
+			var query = $.trim($('#fpp-ai-extract-search').val());
+			var $dropdown = $('#fpp-ai-extract-search-results');
+
+			if (query.length < 2) {
+				$dropdown.hide().empty();
+				return;
+			}
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_search_posts',
+				nonce:  fppInterlinking.nonce,
+				search: query
+			}, function(response) {
+				if (response.success && response.data.results.length > 0) {
+					var html = '';
+					$.each(response.data.results, function(i, post) {
+						html += '<div class="fpp-search-result-item fpp-ai-extract-result-item"'
+							+ ' data-id="' + post.id + '"'
+							+ ' data-title="' + FPP.escAttr(post.title) + '"'
+							+ ' data-url="' + FPP.escAttr(post.permalink) + '">'
+							+ '<strong>' + FPP.escHtml(post.title) + '</strong>'
+							+ ' <span class="fpp-search-type">(' + FPP.escHtml(post.post_type) + ')</span>'
+							+ '<br><small>' + FPP.escHtml(post.permalink) + '</small>'
+							+ '</div>';
+					});
+					$dropdown.html(html).show();
+				} else {
+					$dropdown.html('<div class="fpp-search-no-results">' + FPP.escHtml(fppInterlinking.i18n.no_posts_found) + '</div>').show();
+				}
+			});
+		},
+
+		aiExtractSelectPost: function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			var $item = $(this);
+			$('#fpp-ai-extract-post-id').val($item.data('id'));
+			$('#fpp-ai-extract-selected').html(
+				'<strong>' + FPP.escHtml($item.data('title')) + '</strong>'
+				+ ' <small>(' + FPP.escHtml($item.data('url')) + ')</small>'
+			).show();
+			$('#fpp-ai-extract-search').val('');
+			$('#fpp-ai-extract-search-results').hide().empty();
+			$('#fpp-ai-extract-btn').prop('disabled', false);
+		},
+
+		aiExtractKeywords: function(e) {
+			e.preventDefault();
+			var postId = $('#fpp-ai-extract-post-id').val();
+			if (!postId) {
+				FPP.showNotice('error', fppInterlinking.i18n.ai_select_post);
+				return;
+			}
+
+			var $btn = $(this);
+			$btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 5px;vertical-align:middle;"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_processing));
+
+			$.post(fppInterlinking.ajax_url, {
+				action:  'fpp_interlinking_ai_extract_keywords',
+				nonce:   fppInterlinking.nonce,
+				post_id: postId
+			}, function(response) {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-lightbulb"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_extract_btn));
+				if (response.success) {
+					FPP.renderAiExtractResults(response.data);
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-lightbulb"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_extract_btn));
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderAiExtractResults: function(data) {
+			var $results = $('#fpp-ai-extract-results');
+			var $tbody = $('#fpp-ai-extract-tbody');
+			$tbody.empty();
+
+			if (!data.keywords || data.keywords.length === 0) {
+				$results.hide();
+				FPP.showNotice('error', fppInterlinking.i18n.ai_no_results);
+				return;
+			}
+
+			$.each(data.keywords, function(i, kw) {
+				var keyword = kw.keyword || '';
+				var relevance = kw.relevance || 0;
+				var exists = kw.already_exists;
+				var scoreClass = relevance >= 7 ? 'fpp-score-high' : (relevance >= 4 ? 'fpp-score-medium' : 'fpp-score-low');
+
+				var actionBtn = exists
+					? '<span class="description">' + FPP.escHtml(fppInterlinking.i18n.already_mapped) + '</span>'
+					: '<button type="button" class="button button-small button-primary fpp-ai-add-mapping"'
+					  + ' data-keyword="' + FPP.escAttr(keyword) + '"'
+					  + ' data-url="' + FPP.escAttr(data.post_url) + '">'
+					  + FPP.escHtml(fppInterlinking.i18n.ai_add_mapping)
+					  + '</button>';
+
+				$tbody.append(
+					'<tr>'
+					+ '<td class="column-ai-keyword">' + FPP.escHtml(keyword) + '</td>'
+					+ '<td class="column-ai-relevance"><span class="fpp-ai-score ' + scoreClass + '">' + FPP.escHtml(String(relevance)) + '/10</span></td>'
+					+ '<td class="column-ai-actions">' + actionBtn + '</td>'
+					+ '</tr>'
+				);
+			});
+
+			$results.show();
+		},
+
+		/* ── AI Relevance Scoring ────────────────────────────────────── */
+
+		aiScoreRelevance: function(e) {
+			e.preventDefault();
+			var keyword = $.trim($('#fpp-ai-score-keyword').val());
+			if (!keyword) {
+				FPP.showNotice('error', fppInterlinking.i18n.ai_enter_keyword);
+				return;
+			}
+
+			var $btn = $(this);
+			$btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 5px;vertical-align:middle;"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_processing));
+
+			$.post(fppInterlinking.ajax_url, {
+				action:  'fpp_interlinking_ai_score_relevance',
+				nonce:   fppInterlinking.nonce,
+				keyword: keyword
+			}, function(response) {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-chart-bar"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_score_btn));
+				if (response.success) {
+					FPP.renderAiScoreResults(response.data);
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-chart-bar"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_score_btn));
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderAiScoreResults: function(data) {
+			var $results = $('#fpp-ai-score-results');
+			var $tbody = $('#fpp-ai-score-tbody');
+			$tbody.empty();
+
+			if (!data.scores || data.scores.length === 0) {
+				$results.hide();
+				FPP.showNotice('error', fppInterlinking.i18n.ai_no_results);
+				return;
+			}
+
+			$.each(data.scores, function(i, item) {
+				var score = item.score || 0;
+				var scoreClass = score >= 70 ? 'fpp-score-high' : (score >= 40 ? 'fpp-score-medium' : 'fpp-score-low');
+
+				$tbody.append(
+					'<tr>'
+					+ '<td class="column-ai-title">' + FPP.escHtml(item.title || '') + '</td>'
+					+ '<td class="column-ai-url"><a href="' + FPP.escAttr(item.url || '') + '" target="_blank" rel="noopener noreferrer">' + FPP.escHtml(item.url || '') + '</a></td>'
+					+ '<td class="column-ai-score"><span class="fpp-ai-score ' + scoreClass + '">' + FPP.escHtml(String(score)) + '/100</span></td>'
+					+ '<td class="column-ai-reason">' + FPP.escHtml(item.reason || '') + '</td>'
+					+ '<td class="column-ai-actions">'
+					+ '<button type="button" class="button button-small button-primary fpp-ai-add-mapping"'
+					+ ' data-keyword="' + FPP.escAttr(data.keyword) + '"'
+					+ ' data-url="' + FPP.escAttr(item.url || '') + '">'
+					+ FPP.escHtml(fppInterlinking.i18n.ai_add_mapping)
+					+ '</button></td>'
+					+ '</tr>'
+				);
+			});
+
+			$results.show();
+		},
+
+		/* ── AI Content Gap Analysis ─────────────────────────────────── */
+
+		aiContentGaps: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			$btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 5px;vertical-align:middle;"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_processing));
+			$('#fpp-ai-gaps-status').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_ai_content_gaps',
+				nonce:  fppInterlinking.nonce,
+				offset: 0
+			}, function(response) {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-search"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_gaps_btn));
+				if (response.success) {
+					FPP.renderAiGapsResults(response.data);
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-search"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_gaps_btn));
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderAiGapsResults: function(data) {
+			var $results = $('#fpp-ai-gaps-results');
+			var $tbody = $('#fpp-ai-gaps-tbody');
+			$tbody.empty();
+
+			var statusText = fppInterlinking.i18n.ai_analysed_info
+				.replace('%1$d', data.analysed || 0)
+				.replace('%2$d', data.total_posts || 0);
+			$('#fpp-ai-gaps-status').text(statusText);
+
+			if (!data.gaps || data.gaps.length === 0) {
+				$results.hide();
+				FPP.showNotice('success', 'No content gaps found — your interlinking looks good!');
+				return;
+			}
+
+			$.each(data.gaps, function(i, gap) {
+				var confidence = gap.confidence || 0;
+				var scoreClass = confidence >= 70 ? 'fpp-score-high' : (confidence >= 40 ? 'fpp-score-medium' : 'fpp-score-low');
+
+				$tbody.append(
+					'<tr>'
+					+ '<td class="column-ai-keyword">' + FPP.escHtml(gap.keyword || '') + '</td>'
+					+ '<td class="column-ai-source">' + FPP.escHtml(gap.source_title || '') + '</td>'
+					+ '<td class="column-ai-target">' + FPP.escHtml(gap.target_title || '') + '</td>'
+					+ '<td class="column-ai-confidence"><span class="fpp-ai-score ' + scoreClass + '">' + FPP.escHtml(String(confidence)) + '%</span></td>'
+					+ '<td class="column-ai-reason">' + FPP.escHtml(gap.reason || '') + '</td>'
+					+ '<td class="column-ai-actions">'
+					+ '<button type="button" class="button button-small button-primary fpp-ai-add-mapping"'
+					+ ' data-keyword="' + FPP.escAttr(gap.keyword || '') + '"'
+					+ ' data-url="' + FPP.escAttr(gap.target_url || '') + '">'
+					+ FPP.escHtml(fppInterlinking.i18n.ai_add_mapping)
+					+ '</button></td>'
+					+ '</tr>'
+				);
+			});
+
+			$results.show();
+		},
+
+		/* ── AI Auto-Generate Mappings ───────────────────────────────── */
+
+		aiAutoGenerate: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			$btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 5px;vertical-align:middle;"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_processing));
+			$('#fpp-ai-generate-status').text('');
+			$('#fpp-ai-add-all-btn').hide();
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_ai_auto_generate',
+				nonce:  fppInterlinking.nonce,
+				offset: 0
+			}, function(response) {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-update"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_generate_btn));
+				if (response.success) {
+					FPP.renderAiGenerateResults(response.data);
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false).html('<span class="dashicons dashicons-update"></span> ' + FPP.escHtml(fppInterlinking.i18n.ai_generate_btn));
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderAiGenerateResults: function(data) {
+			var $results = $('#fpp-ai-generate-results');
+			var $tbody = $('#fpp-ai-generate-tbody');
+			$tbody.empty();
+
+			var statusText = fppInterlinking.i18n.ai_analysed_info
+				.replace('%1$d', data.analysed || 0)
+				.replace('%2$d', data.total_posts || 0);
+			$('#fpp-ai-generate-status').text(statusText);
+
+			if (!data.mappings || data.mappings.length === 0) {
+				$results.hide();
+				$('#fpp-ai-add-all-btn').hide();
+				FPP.showNotice('error', fppInterlinking.i18n.ai_no_results);
+				return;
+			}
+
+			$.each(data.mappings, function(i, m) {
+				var confidence = m.confidence || 0;
+				var scoreClass = confidence >= 70 ? 'fpp-score-high' : (confidence >= 40 ? 'fpp-score-medium' : 'fpp-score-low');
+
+				$tbody.append(
+					'<tr>'
+					+ '<td class="column-ai-keyword">' + FPP.escHtml(m.keyword || '') + '</td>'
+					+ '<td class="column-ai-url"><a href="' + FPP.escAttr(m.target_url || '') + '" target="_blank" rel="noopener noreferrer">' + FPP.escHtml(m.target_url || '') + '</a></td>'
+					+ '<td class="column-ai-target">' + FPP.escHtml(m.target_title || '') + '</td>'
+					+ '<td class="column-ai-confidence"><span class="fpp-ai-score ' + scoreClass + '">' + FPP.escHtml(String(confidence)) + '%</span></td>'
+					+ '<td class="column-ai-actions">'
+					+ '<button type="button" class="button button-small button-primary fpp-ai-add-mapping"'
+					+ ' data-keyword="' + FPP.escAttr(m.keyword || '') + '"'
+					+ ' data-url="' + FPP.escAttr(m.target_url || '') + '">'
+					+ FPP.escHtml(fppInterlinking.i18n.ai_add_mapping)
+					+ '</button></td>'
+					+ '</tr>'
+				);
+			});
+
+			$results.show();
+			if (data.mappings.length > 1) {
+				$('#fpp-ai-add-all-btn').show();
+			}
+		},
+
+		/* ── AI Shared: Add Mapping ──────────────────────────────────── */
+
+		aiAddMapping: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			var keyword = $btn.data('keyword');
+			var url = $btn.data('url');
+
+			$btn.prop('disabled', true).text('Adding...');
+
+			$.post(fppInterlinking.ajax_url, {
+				action:     'fpp_interlinking_ai_add_mapping',
+				nonce:      fppInterlinking.nonce,
+				keyword:    keyword,
+				target_url: url
+			}, function(response) {
+				if (response.success) {
+					$btn.replaceWith('<span class="fpp-badge-active">' + FPP.escHtml(fppInterlinking.i18n.ai_added) + '</span>');
+					FPP.appendKeywordRow(response.data.keyword);
+					$('#fpp-no-keywords').hide();
+					$('#fpp-keywords-table').show();
+				} else {
+					$btn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_mapping);
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_mapping);
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		aiAddAllMappings: function(e) {
+			e.preventDefault();
+			var $btns = $('#fpp-ai-generate-tbody .fpp-ai-add-mapping:not(:disabled)');
+			if ($btns.length === 0) return;
+
+			var $allBtn = $(this);
+			$allBtn.prop('disabled', true).text('Adding all...');
+
+			var completed = 0;
+			var total = $btns.length;
+
+			$btns.each(function() {
+				$(this).trigger('click');
+			});
+
+			// Re-enable after a delay.
+			setTimeout(function() {
+				$allBtn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_all);
+				FPP.showNotice('success', 'Added ' + total + ' keyword mappings.');
+			}, total * 500 + 1000);
 		},
 
 		/* ── UI Helpers ───────────────────────────────────────────────── */

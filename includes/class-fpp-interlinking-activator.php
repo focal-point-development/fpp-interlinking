@@ -85,5 +85,10 @@ class FPP_Interlinking_Activator {
 
 		// DB version tracking – admin-only, autoload = false.
 		add_option( 'fpp_interlinking_db_version', FPP_INTERLINKING_VERSION, '', false );
+
+		// AI settings – admin-only, autoload = false.
+		add_option( 'fpp_interlinking_ai_provider', 'openai', '', false );
+		add_option( 'fpp_interlinking_ai_model', 'gpt-4o-mini', '', false );
+		add_option( 'fpp_interlinking_ai_max_tokens', 2000, '', false );
 	}
 }

@@ -38,6 +38,12 @@ function fpp_interlinking_uninstall_site() {
 	delete_option( 'fpp_interlinking_excluded_posts' );
 	delete_option( 'fpp_interlinking_db_version' );
 
+	// AI options.
+	delete_option( 'fpp_interlinking_ai_api_key' );
+	delete_option( 'fpp_interlinking_ai_provider' );
+	delete_option( 'fpp_interlinking_ai_model' );
+	delete_option( 'fpp_interlinking_ai_max_tokens' );
+
 	// Remove transients.
 	delete_transient( 'fpp_interlinking_keywords_cache' );
 }
