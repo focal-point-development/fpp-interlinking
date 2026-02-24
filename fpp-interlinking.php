@@ -53,6 +53,8 @@ register_deactivation_hook( __FILE__, array( 'FPP_Interlinking_Deactivator', 'de
  * Uses dbDelta() which is safe to re-run – it only applies incremental changes.
  *
  * @since 1.0.0
+ *
+ * @return void
  */
 function fpp_interlinking_check_db_version() {
 	$installed_version = get_option( 'fpp_interlinking_db_version', '0' );
@@ -68,8 +70,8 @@ add_action( 'plugins_loaded', 'fpp_interlinking_check_db_version' );
  *
  * @since 1.1.0
  *
- * @param array $links Existing plugin action links.
- * @return array Modified plugin action links.
+ * @param string[] $links Existing plugin action links.
+ * @return string[] Modified plugin action links.
  */
 function fpp_interlinking_plugin_action_links( $links ) {
 	$settings_link = sprintf(

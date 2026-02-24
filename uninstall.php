@@ -22,6 +22,9 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
  * Remove plugin data for a single site.
  *
  * @since 1.1.0
+ *
+ * @global wpdb $wpdb WordPress database abstraction object.
+ * @return void
  */
 function fpp_interlinking_uninstall_site() {
 	global $wpdb;

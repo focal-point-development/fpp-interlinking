@@ -70,10 +70,15 @@ class FPP_Interlinking_AI {
 		}
 
 		if ( function_exists( 'sodium_crypto_secretbox' ) ) {
-			$key   = self::get_encryption_key();
-			$nonce = random_bytes( SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
-			$encrypted = sodium_crypto_secretbox( $api_key, $nonce, $key );
-			$stored = base64_encode( $nonce . $encrypted );
+			try {
+				$key       = self::get_encryption_key();
+				$nonce     = random_bytes( SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
+				$encrypted = sodium_crypto_secretbox( $api_key, $nonce, $key );
+				$stored    = base64_encode( $nonce . $encrypted );
+			} catch ( \Exception $e ) {
+				// Sodium or random_bytes failed; fall back to base64.
+				$stored = 'b64:' . base64_encode( $api_key );
+			}
 		} else {
 			$stored = 'b64:' . base64_encode( $api_key );
 		}
@@ -84,6 +89,11 @@ class FPP_Interlinking_AI {
 	/**
 	 * Retrieve and decrypt the API key.
 	 *
+	 * Handles three storage formats:
+	 *  1. 'b64:…' — base64-encoded fallback (no sodium extension).
+	 *  2. Binary blob — sodium-encrypted (nonce + ciphertext).
+	 *  3. Empty string — no key configured.
+	 *
 	 * @since 2.0.0
 	 *
 	 * @return string Plain-text API key, or empty string.
@@ -91,22 +101,42 @@ class FPP_Interlinking_AI {
 	public static function get_api_key() {
 		$stored = get_option( self::OPTION_API_KEY, '' );
 
-		if ( empty( $stored ) ) {
+		if ( empty( $stored ) || ! is_string( $stored ) ) {
 			return '';
 		}
 
 		// Base64 fallback.
 		if ( 0 === strpos( $stored, 'b64:' ) ) {
-			return base64_decode( substr( $stored, 4 ) );
+			$decoded = base64_decode( substr( $stored, 4 ), true );
+			return ( false !== $decoded ) ? $decoded : '';
 		}
 
 		// Sodium decryption.
 		if ( function_exists( 'sodium_crypto_secretbox_open' ) ) {
-			$decoded = base64_decode( $stored );
-			$key     = self::get_encryption_key();
-			$nonce   = substr( $decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
-			$cipher  = substr( $decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
-			$plain   = sodium_crypto_secretbox_open( $cipher, $nonce, $key );
+			$decoded = base64_decode( $stored, true );
+
+			if ( false === $decoded ) {
+				return '';
+			}
+
+			// Verify the decoded data is long enough to contain nonce + ciphertext.
+			if ( strlen( $decoded ) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES ) {
+				return '';
+			}
+
+			$key    = self::get_encryption_key();
+			$nonce  = substr( $decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
+			$cipher = substr( $decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
+
+			try {
+				$plain = sodium_crypto_secretbox_open( $cipher, $nonce, $key );
+			} catch ( \SodiumException $e ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( '[WP Interlinking] Sodium decryption failed: ' . $e->getMessage() );
+				}
+				return '';
+			}
 
 			return ( false !== $plain ) ? $plain : '';
 		}
@@ -166,7 +196,8 @@ class FPP_Interlinking_AI {
 	 */
 	public static function get_model() {
 		$provider = self::get_provider();
-		return get_option( self::OPTION_MODEL, self::DEFAULT_MODELS[ $provider ] ?? 'gpt-4o-mini' );
+		$default  = isset( self::DEFAULT_MODELS[ $provider ] ) ? self::DEFAULT_MODELS[ $provider ] : 'gpt-4o-mini';
+		return get_option( self::OPTION_MODEL, $default );
 	}
 
 	/**
@@ -201,7 +232,7 @@ class FPP_Interlinking_AI {
 		$provider   = self::get_provider();
 		$model      = self::get_model();
 		$max_tokens = self::get_max_tokens();
-		$endpoint   = self::API_ENDPOINTS[ $provider ] ?? self::API_ENDPOINTS['openai'];
+		$endpoint   = isset( self::API_ENDPOINTS[ $provider ] ) ? self::API_ENDPOINTS[ $provider ] : self::API_ENDPOINTS['openai'];
 
 		if ( 'anthropic' === $provider ) {
 			return self::call_anthropic( $endpoint, $api_key, $model, $system_prompt, $user_prompt, $max_tokens, $temperature );
@@ -214,6 +245,15 @@ class FPP_Interlinking_AI {
 	 * OpenAI-compatible API call.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @param string $endpoint      API endpoint URL.
+	 * @param string $api_key       Plain-text API key.
+	 * @param string $model         Model identifier (e.g. 'gpt-4o-mini').
+	 * @param string $system_prompt System/context prompt.
+	 * @param string $user_prompt   User message.
+	 * @param int    $max_tokens    Maximum response tokens.
+	 * @param float  $temperature   Sampling temperature (0.0–1.0).
+	 * @return string|WP_Error The AI response text or WP_Error.
 	 */
 	private static function call_openai( $endpoint, $api_key, $model, $system_prompt, $user_prompt, $max_tokens, $temperature ) {
 		$body = array(
@@ -258,6 +298,15 @@ class FPP_Interlinking_AI {
 	 * Anthropic (Claude) API call.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @param string $endpoint      API endpoint URL.
+	 * @param string $api_key       Plain-text API key.
+	 * @param string $model         Model identifier (e.g. 'claude-sonnet-4-20250514').
+	 * @param string $system_prompt System/context prompt.
+	 * @param string $user_prompt   User message.
+	 * @param int    $max_tokens    Maximum response tokens.
+	 * @param float  $temperature   Sampling temperature (0.0–1.0).
+	 * @return string|WP_Error The AI response text or WP_Error.
 	 */
 	private static function call_anthropic( $endpoint, $api_key, $model, $system_prompt, $user_prompt, $max_tokens, $temperature ) {
 		$body = array(
@@ -399,14 +448,14 @@ class FPP_Interlinking_AI {
 			return $scores;
 		}
 
-		// Map scores back to candidates.
+		// Map scores back to candidates with safe array access.
 		$result = array();
 		foreach ( $scores as $score ) {
-			$idx = ( (int) $score['index'] ) - 1;
-			if ( isset( $candidates[ $idx ] ) ) {
+			$idx = ( (int) ( $score['index'] ?? 0 ) ) - 1;
+			if ( $idx >= 0 && isset( $candidates[ $idx ] ) ) {
 				$result[] = array_merge( $candidates[ $idx ], array(
-					'score'  => (int) $score['score'],
-					'reason' => isset( $score['reason'] ) ? sanitize_text_field( $score['reason'] ) : '',
+					'score'  => (int) ( $score['score'] ?? 0 ),
+					'reason' => sanitize_text_field( $score['reason'] ?? '' ),
 				) );
 			}
 		}
@@ -650,6 +699,8 @@ class FPP_Interlinking_AI {
 	 * Parse a JSON array from the AI response text.
 	 *
 	 * Handles cases where the response is wrapped in markdown code blocks.
+	 * Validates that the result is a non-empty sequential array of objects
+	 * and sanitises every string value to prevent stored XSS.
 	 *
 	 * @since 2.0.0
 	 *
@@ -669,14 +720,81 @@ class FPP_Interlinking_AI {
 
 		$decoded = json_decode( $response, true );
 
-		if ( null === $decoded || ! is_array( $decoded ) ) {
+		if ( json_last_error() !== JSON_ERROR_NONE ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( sprintf( '[WP Interlinking AI] Failed to parse JSON response: %s', substr( $response, 0, 500 ) ) );
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( sprintf(
+					'[WP Interlinking AI] JSON decode error (%s): %s',
+					json_last_error_msg(),
+					substr( $response, 0, 500 )
+				) );
 			}
-			return new \WP_Error( 'json_parse_error', __( 'Failed to parse AI response. Please try again.', 'fpp-interlinking' ) );
+			return new \WP_Error(
+				'json_parse_error',
+				__( 'Failed to parse AI response. Please try again.', 'fpp-interlinking' )
+			);
 		}
 
+		if ( ! is_array( $decoded ) || empty( $decoded ) ) {
+			return new \WP_Error(
+				'json_empty',
+				__( 'AI returned an empty result set. Please try again.', 'fpp-interlinking' )
+			);
+		}
+
+		// Ensure we have a sequential array of associative arrays.
+		if ( ! isset( $decoded[0] ) || ! is_array( $decoded[0] ) ) {
+			return new \WP_Error(
+				'json_format_error',
+				__( 'AI response format is unexpected. Please try again.', 'fpp-interlinking' )
+			);
+		}
+
+		// Sanitise every string value in the decoded data to prevent stored XSS.
+		$decoded = self::sanitise_parsed_data( $decoded );
+
 		return $decoded;
+	}
+
+	/**
+	 * Recursively sanitise parsed AI response data.
+	 *
+	 * String values are passed through sanitize_text_field(); integers and
+	 * floats are cast to their respective types. URLs are sanitised with
+	 * esc_url_raw(). This prevents stored XSS from AI hallucinations or
+	 * prompt-injection attempts.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param array $data Parsed JSON data.
+	 * @return array Sanitised data.
+	 */
+	private static function sanitise_parsed_data( $data ) {
+		$url_keys = array( 'url', 'target_url', 'permalink' );
+
+		foreach ( $data as &$item ) {
+			if ( is_array( $item ) ) {
+				foreach ( $item as $key => &$value ) {
+					if ( is_string( $value ) ) {
+						if ( in_array( $key, $url_keys, true ) ) {
+							$value = esc_url_raw( $value );
+						} else {
+							$value = sanitize_text_field( $value );
+						}
+					} elseif ( is_int( $value ) || is_float( $value ) ) {
+						// Leave numeric values as-is; they are safe.
+						continue;
+					} elseif ( is_array( $value ) ) {
+						$value = self::sanitise_parsed_data( array( $value ) );
+						$value = $value[0];
+					}
+				}
+				unset( $value );
+			}
+		}
+		unset( $item );
+
+		return $data;
 	}
 
 	/**

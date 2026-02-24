@@ -129,6 +129,24 @@ class FPP_Interlinking_Admin {
 				'ai_analysed_info'       => esc_html__( 'Analysed %1$d of %2$d posts', 'fpp-interlinking' ),
 				'ai_confidence'          => esc_html__( 'Confidence', 'fpp-interlinking' ),
 				'ai_relevance'           => esc_html__( 'Relevance', 'fpp-interlinking' ),
+				'ai_no_gaps'             => esc_html__( 'No content gaps found — your interlinking looks good!', 'fpp-interlinking' ),
+				/* translators: %d: number of keyword mappings added. */
+				'ai_added_count'         => esc_html__( 'Added %d keyword mappings.', 'fpp-interlinking' ),
+				// Shared button labels.
+				'saving'                 => esc_html__( 'Saving...', 'fpp-interlinking' ),
+				'adding'                 => esc_html__( 'Adding...', 'fpp-interlinking' ),
+				'adding_all'             => esc_html__( 'Adding all...', 'fpp-interlinking' ),
+				'add_keyword'            => esc_html__( 'Add Keyword', 'fpp-interlinking' ),
+				'update_keyword'         => esc_html__( 'Update Keyword', 'fpp-interlinking' ),
+				'save_settings'          => esc_html__( 'Save Settings', 'fpp-interlinking' ),
+				'save_ai_settings'       => esc_html__( 'Save AI Settings', 'fpp-interlinking' ),
+				'invalid_url'            => esc_html__( 'Please enter a valid URL starting with http:// or https://.', 'fpp-interlinking' ),
+				'add_new_mapping'        => esc_html__( 'Add New Keyword Mapping', 'fpp-interlinking' ),
+				'edit_mapping'           => esc_html__( 'Edit Keyword Mapping', 'fpp-interlinking' ),
+				'active'                 => esc_html__( 'Active', 'fpp-interlinking' ),
+				'inactive'               => esc_html__( 'Inactive', 'fpp-interlinking' ),
+				'disable'                => esc_html__( 'Disable', 'fpp-interlinking' ),
+				'enable'                 => esc_html__( 'Enable', 'fpp-interlinking' ),
 			),
 		) );
 	}
@@ -151,15 +169,15 @@ class FPP_Interlinking_Admin {
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
-			<div id="fpp-notices"></div>
+			<div id="fpp-notices" role="alert" aria-live="polite"></div>
 
 			<!-- Global Settings -->
 			<div class="fpp-section fpp-settings-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-settings">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-settings" role="button" tabindex="0" aria-expanded="true" aria-controls="fpp-settings-content">
 					<?php esc_html_e( 'Global Settings', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-settings-content">
+				<div class="fpp-section-content" id="fpp-settings-content" role="region" aria-labelledby="fpp-toggle-settings">
 					<table class="form-table">
 						<tr>
 							<th><label for="fpp-global-max-replacements"><?php esc_html_e( 'Max replacements per keyword', 'fpp-interlinking' ); ?></label></th>
@@ -352,11 +370,11 @@ class FPP_Interlinking_Admin {
 
 			<!-- Suggest Keywords from Content -->
 			<div class="fpp-section fpp-suggest-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-suggestions">
+				<h2 class="fpp-section-toggle" id="fpp-toggle-suggestions" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-suggestions-content">
 					<?php esc_html_e( 'Suggest Keywords from Content', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-suggestions-content" style="display:none;">
+				<div class="fpp-section-content" id="fpp-suggestions-content" role="region" aria-labelledby="fpp-toggle-suggestions" style="display:none;">
 					<p class="description">
 						<?php esc_html_e( 'Scan your published posts and pages to discover potential keyword mappings based on their titles.', 'fpp-interlinking' ); ?>
 					</p>
@@ -393,12 +411,12 @@ class FPP_Interlinking_Admin {
 
 			<!-- AI Settings -->
 			<div class="fpp-section fpp-ai-settings-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-settings">
-					<span class="dashicons dashicons-admin-generic"></span>
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-settings" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-settings-content">
+					<span class="dashicons dashicons-admin-generic" aria-hidden="true"></span>
 					<?php esc_html_e( 'AI Settings', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-ai-settings-content" style="display:none;">
+				<div class="fpp-section-content" id="fpp-ai-settings-content" role="region" aria-labelledby="fpp-toggle-ai-settings" style="display:none;">
 					<table class="form-table">
 						<tr>
 							<th><label for="fpp-ai-provider"><?php esc_html_e( 'AI Provider', 'fpp-interlinking' ); ?></label></th>
@@ -455,12 +473,12 @@ class FPP_Interlinking_Admin {
 
 			<!-- AI Keyword Extraction -->
 			<div class="fpp-section fpp-ai-section fpp-ai-extract-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-extract">
-					<span class="dashicons dashicons-lightbulb"></span>
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-extract" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-extract-content">
+					<span class="dashicons dashicons-lightbulb" aria-hidden="true"></span>
 					<?php esc_html_e( 'AI Keyword Extraction', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-ai-extract-content" style="display:none;">
+				<div class="fpp-section-content" id="fpp-ai-extract-content" role="region" aria-labelledby="fpp-toggle-ai-extract" style="display:none;">
 					<p class="description"><?php esc_html_e( 'Select a post or page to analyse its content and extract SEO keywords for interlinking.', 'fpp-interlinking' ); ?></p>
 					<div class="fpp-ai-controls">
 						<div class="fpp-search-wrapper">
@@ -495,12 +513,12 @@ class FPP_Interlinking_Admin {
 
 			<!-- AI Relevance Scoring -->
 			<div class="fpp-section fpp-ai-section fpp-ai-score-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-score">
-					<span class="dashicons dashicons-chart-bar"></span>
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-score" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-score-content">
+					<span class="dashicons dashicons-chart-bar" aria-hidden="true"></span>
 					<?php esc_html_e( 'AI Relevance Scoring', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-ai-score-content" style="display:none;">
+				<div class="fpp-section-content" id="fpp-ai-score-content" role="region" aria-labelledby="fpp-toggle-ai-score" style="display:none;">
 					<p class="description"><?php esc_html_e( 'Enter a keyword to find and score the most relevant pages to link to.', 'fpp-interlinking' ); ?></p>
 					<div class="fpp-ai-controls">
 						<input type="text" id="fpp-ai-score-keyword" class="regular-text"
@@ -531,12 +549,12 @@ class FPP_Interlinking_Admin {
 
 			<!-- AI Content Gap Analysis -->
 			<div class="fpp-section fpp-ai-section fpp-ai-gaps-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-gaps">
-					<span class="dashicons dashicons-search"></span>
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-gaps" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-gaps-content">
+					<span class="dashicons dashicons-search" aria-hidden="true"></span>
 					<?php esc_html_e( 'AI Content Gap Analysis', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-ai-gaps-content" style="display:none;">
+				<div class="fpp-section-content" id="fpp-ai-gaps-content" role="region" aria-labelledby="fpp-toggle-ai-gaps" style="display:none;">
 					<p class="description"><?php esc_html_e( 'Analyse your published content to discover posts that should link to each other but currently don\'t.', 'fpp-interlinking' ); ?></p>
 					<div class="fpp-ai-controls">
 						<button type="button" id="fpp-ai-gaps-btn" class="button button-primary">
@@ -567,12 +585,12 @@ class FPP_Interlinking_Admin {
 
 			<!-- AI Auto-Generate Mappings -->
 			<div class="fpp-section fpp-ai-section fpp-ai-generate-section">
-				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-generate">
-					<span class="dashicons dashicons-update"></span>
+				<h2 class="fpp-section-toggle" id="fpp-toggle-ai-generate" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-generate-content">
+					<span class="dashicons dashicons-update" aria-hidden="true"></span>
 					<?php esc_html_e( 'AI Auto-Generate Mappings', 'fpp-interlinking' ); ?>
-					<span class="dashicons dashicons-arrow-down-alt2"></span>
+					<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 				</h2>
-				<div class="fpp-section-content" id="fpp-ai-generate-content" style="display:none;">
+				<div class="fpp-section-content" id="fpp-ai-generate-content" role="region" aria-labelledby="fpp-toggle-ai-generate" style="display:none;">
 					<p class="description"><?php esc_html_e( 'Let AI scan your content and automatically propose keyword-to-URL mappings for a complete interlinking strategy.', 'fpp-interlinking' ); ?></p>
 					<div class="fpp-ai-controls">
 						<button type="button" id="fpp-ai-generate-btn" class="button button-primary">
@@ -616,6 +634,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Add a new keyword mapping.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_add_keyword() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -673,6 +693,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Update an existing keyword mapping.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_update_keyword() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -731,6 +753,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Delete a keyword mapping.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_delete_keyword() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -759,6 +783,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Toggle a keyword's active state.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_toggle_keyword() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -793,6 +819,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Save global settings.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_save_settings() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -824,6 +852,8 @@ class FPP_Interlinking_Admin {
 	 * Returns a lightweight result set (max 10) for fast response.
 	 *
 	 * @since 1.2.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_search_posts() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -874,6 +904,8 @@ class FPP_Interlinking_Admin {
 	 * Used by the "Scan" button on each keyword row.
 	 *
 	 * @since 1.2.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_scan_keyword() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -928,6 +960,8 @@ class FPP_Interlinking_Admin {
 	 * that matches an existing keyword mapping.
 	 *
 	 * @since 1.2.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_suggest_keywords() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -987,6 +1021,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Save AI settings (provider, model, API key, max tokens).
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_save_ai_settings() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -1030,6 +1066,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Test the AI API connection.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_test_ai_connection() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -1051,6 +1089,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Extract keywords from a post using AI.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_ai_extract_keywords() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -1095,6 +1135,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Score relevance of pages for a keyword using AI.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_ai_score_relevance() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -1154,6 +1196,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Analyse content gaps using AI.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_ai_content_gaps() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -1177,6 +1221,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Auto-generate keyword mappings using AI.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_ai_auto_generate() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
@@ -1200,6 +1246,8 @@ class FPP_Interlinking_Admin {
 	 * AJAX: Add a single AI-suggested mapping to the keywords table.
 	 *
 	 * @since 2.0.0
+	 *
+	 * @return void Sends JSON response and dies.
 	 */
 	public function ajax_ai_add_mapping() {
 		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );

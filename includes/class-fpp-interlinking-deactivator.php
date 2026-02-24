@@ -20,6 +20,8 @@ class FPP_Interlinking_Deactivator {
 	 * Run deactivation tasks.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void
 	 */
 	public static function deactivate() {
 		delete_transient( 'fpp_interlinking_keywords_cache' );

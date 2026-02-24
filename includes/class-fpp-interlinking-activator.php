@@ -19,6 +19,8 @@ class FPP_Interlinking_Activator {
 	 * Run activation tasks.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void
 	 */
 	public static function activate() {
 		self::create_table();
@@ -32,6 +34,9 @@ class FPP_Interlinking_Activator {
 	 * only applies incremental changes, making this safe for upgrades.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @global wpdb $wpdb WordPress database abstraction object.
+	 * @return void
 	 */
 	private static function create_table() {
 		global $wpdb;
@@ -72,6 +77,8 @@ class FPP_Interlinking_Activator {
 	 * to avoid loading them into the alloptions cache on every request.
 	 *
 	 * @since 1.0.0
+	 *
+	 * @return void
 	 */
 	private static function set_default_options() {
 		// Core replacement settings – loaded on frontend, autoload = true.
