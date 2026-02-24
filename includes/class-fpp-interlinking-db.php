@@ -249,4 +249,193 @@ class FPP_Interlinking_DB {
 
 		return $result;
 	}
+
+	/* ── v2.1.0: Pagination, Search & Bulk Ops ──────────────────────── */
+
+	/**
+	 * Retrieve keywords with pagination and optional search filter.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param int    $page     Current page (1-based).
+	 * @param int    $per_page Items per page.
+	 * @param string $search   Optional search string to filter by keyword or URL.
+	 * @param string $orderby  Column to sort by (keyword, target_url, is_active, created_at).
+	 * @param string $order    Sort direction (ASC or DESC).
+	 * @return array { keywords: array, total: int, pages: int, page: int }
+	 */
+	public static function get_keywords_paginated( $page = 1, $per_page = 20, $search = '', $orderby = 'keyword', $order = 'ASC' ) {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		// Whitelist sortable columns.
+		$allowed_orderby = array( 'keyword', 'target_url', 'is_active', 'created_at', 'id' );
+		if ( ! in_array( $orderby, $allowed_orderby, true ) ) {
+			$orderby = 'keyword';
+		}
+		$order = strtoupper( $order ) === 'DESC' ? 'DESC' : 'ASC';
+
+		$where = '';
+		$args  = array();
+
+		if ( ! empty( $search ) ) {
+			$like  = '%' . $wpdb->esc_like( $search ) . '%';
+			$where = ' WHERE keyword LIKE %s OR target_url LIKE %s';
+			$args  = array( $like, $like );
+		}
+
+		// Get total count.
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$count_sql = "SELECT COUNT(*) FROM {$table}" . $where;
+		if ( ! empty( $args ) ) {
+			$count_sql = $wpdb->prepare( $count_sql, $args );
+		}
+		$total = (int) $wpdb->get_var( $count_sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+		$pages  = max( 1, (int) ceil( $total / $per_page ) );
+		$page   = max( 1, min( $page, $pages ) );
+		$offset = ( $page - 1 ) * $per_page;
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$sql = "SELECT * FROM {$table}{$where} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		$query_args = array_merge( $args, array( $per_page, $offset ) );
+		$keywords = $wpdb->get_results( $wpdb->prepare( $sql, $query_args ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+		return array(
+			'keywords' => $keywords ? $keywords : array(),
+			'total'    => $total,
+			'pages'    => $pages,
+			'page'     => $page,
+		);
+	}
+
+	/**
+	 * Bulk delete keywords by IDs.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param int[] $ids Array of keyword IDs to delete.
+	 * @return int Number of rows deleted.
+	 */
+	public static function bulk_delete( $ids ) {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		$ids = array_map( 'absint', $ids );
+		$ids = array_filter( $ids );
+
+		if ( empty( $ids ) ) {
+			return 0;
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$result = $wpdb->query( $wpdb->prepare(
+			"DELETE FROM {$table} WHERE id IN ({$placeholders})",
+			$ids
+		) );
+
+		return ( false !== $result ) ? $result : 0;
+	}
+
+	/**
+	 * Bulk update active state for keywords by IDs.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param int[] $ids       Array of keyword IDs.
+	 * @param int   $is_active New active state (0|1).
+	 * @return int Number of rows updated.
+	 */
+	public static function bulk_toggle( $ids, $is_active ) {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		$ids       = array_map( 'absint', $ids );
+		$ids       = array_filter( $ids );
+		$is_active = absint( $is_active ) ? 1 : 0;
+
+		if ( empty( $ids ) ) {
+			return 0;
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$args         = array_merge( array( $is_active ), $ids );
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$result = $wpdb->query( $wpdb->prepare(
+			"UPDATE {$table} SET is_active = %d WHERE id IN ({$placeholders})",
+			$args
+		) );
+
+		return ( false !== $result ) ? $result : 0;
+	}
+
+	/**
+	 * Export all keywords as an array suitable for CSV generation.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @return array<array<string,mixed>>
+	 */
+	public static function export_all() {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		return $wpdb->get_results(
+			"SELECT keyword, target_url, nofollow, new_tab, max_replacements, is_active FROM {$table} ORDER BY keyword ASC",
+			ARRAY_A
+		);
+	}
+
+	/**
+	 * Import keywords from parsed CSV data.
+	 *
+	 * Skips duplicates (keywords that already exist).
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param array $rows Array of associative arrays with keyword, target_url, etc.
+	 * @return array { imported: int, skipped: int, errors: int }
+	 */
+	public static function import_keywords( $rows ) {
+		$imported = 0;
+		$skipped  = 0;
+		$errors   = 0;
+
+		foreach ( $rows as $row ) {
+			$keyword    = isset( $row['keyword'] ) ? sanitize_text_field( $row['keyword'] ) : '';
+			$target_url = isset( $row['target_url'] ) ? esc_url_raw( $row['target_url'] ) : '';
+
+			if ( empty( $keyword ) || empty( $target_url ) ) {
+				$errors++;
+				continue;
+			}
+
+			if ( self::keyword_exists( $keyword ) ) {
+				$skipped++;
+				continue;
+			}
+
+			$result = self::insert_keyword( array(
+				'keyword'          => $keyword,
+				'target_url'       => $target_url,
+				'nofollow'         => isset( $row['nofollow'] ) ? absint( $row['nofollow'] ) : 0,
+				'new_tab'          => isset( $row['new_tab'] ) ? absint( $row['new_tab'] ) : 1,
+				'max_replacements' => isset( $row['max_replacements'] ) ? absint( $row['max_replacements'] ) : 0,
+			) );
+
+			if ( $result ) {
+				$imported++;
+			} else {
+				$errors++;
+			}
+		}
+
+		return array(
+			'imported' => $imported,
+			'skipped'  => $skipped,
+			'errors'   => $errors,
+		);
+	}
 }

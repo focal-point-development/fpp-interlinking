@@ -3,7 +3,7 @@
  * Plugin Name:       WP Interlinking
  * Plugin URI:        https://developer.wordpress.org/plugins/
  * Description:       AI-powered SEO internal linking. Map keywords to URLs with automatic replacement, AI keyword extraction, relevance scoring, content gap analysis, and auto-generated interlinking strategies. Supports OpenAI and Anthropic.
- * Version:           2.0.0
+ * Version:           2.1.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            FPP
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin constants.
  */
-define( 'FPP_INTERLINKING_VERSION', '2.0.0' );
+define( 'FPP_INTERLINKING_VERSION', '2.1.0' );
 define( 'FPP_INTERLINKING_DB_VERSION', '1.1.0' );
 define( 'FPP_INTERLINKING_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

@@ -3,9 +3,14 @@
  * Front-end content filter that replaces configured keywords with links.
  *
  * Hooks into `the_content` at priority 999 so that other plugins can finish
- * processing the content first. Keyword matching is performed only on plain
- * text segments – existing links, script/style/code/pre/textarea blocks, and
- * HTML tags are left untouched.
+ * processing the content first. Content is split into segments ONCE, then all
+ * keywords are matched against plain-text segments only.
+ *
+ * Protected elements (not replaced):
+ *  - Existing <a> links.
+ *  - <h1>–<h6> headings, <button>, <label>, <figcaption>.
+ *  - <script>, <style>, <code>, <pre>, <textarea>, <select>, <option>.
+ *  - HTML comments.
  *
  * Security: output is escaped late using esc_url() and esc_html().
  *
@@ -31,8 +36,9 @@ class FPP_Interlinking_Replacer {
 	/**
 	 * Main filter callback.
 	 *
-	 * Iterates over active keywords (longest first to prevent partial matches)
-	 * and replaces plain-text occurrences with anchor links.
+	 * Splits content once into protected/plain segments, then iterates all
+	 * keywords against the plain-text segments. This is O(segments × keywords)
+	 * with a single regex split instead of the old O(keywords × split).
 	 *
 	 * @since 1.0.0
 	 *
@@ -60,6 +66,15 @@ class FPP_Interlinking_Replacer {
 			return $content;
 		}
 
+		// Skip disallowed post types.
+		if ( $post_id ) {
+			$allowed_types = $this->get_allowed_post_types();
+			$current_type  = get_post_type( $post_id );
+			if ( ! empty( $allowed_types ) && ! in_array( $current_type, $allowed_types, true ) ) {
+				return $content;
+			}
+		}
+
 		$keywords = $this->get_cached_keywords();
 		if ( empty( $keywords ) ) {
 			return $content;
@@ -72,6 +87,7 @@ class FPP_Interlinking_Replacer {
 		$global_nofollow = (int) get_option( 'fpp_interlinking_nofollow', 0 );
 		$global_new_tab  = (int) get_option( 'fpp_interlinking_new_tab', 1 );
 		$case_sensitive  = (int) get_option( 'fpp_interlinking_case_sensitive', 0 );
+		$max_per_post    = (int) get_option( 'fpp_interlinking_max_links_per_post', 0 );
 
 		// Sort by keyword length descending to prevent partial matches.
 		// e.g. "WordPress SEO" is processed before "WordPress".
@@ -79,83 +95,32 @@ class FPP_Interlinking_Replacer {
 			return strlen( $b['keyword'] ) - strlen( $a['keyword'] );
 		} );
 
-		foreach ( $keywords as $mapping ) {
-			// Self-link prevention: skip when the target URL matches the current post.
-			if ( $current_url && $this->urls_match( $current_url, $mapping['target_url'] ) ) {
-				continue;
-			}
-
-			$content = $this->replace_single_keyword(
-				$content,
-				$mapping,
-				$global_max,
-				$global_nofollow,
-				$global_new_tab,
-				$case_sensitive
-			);
-		}
-
-		return $content;
-	}
-
-	/**
-	 * Replace occurrences of a single keyword in the content.
-	 *
-	 * The content is split into protected (HTML) and plain-text segments.
-	 * Replacement only happens in plain-text segments using word boundaries.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param  string $content         Post content.
-	 * @param  array  $mapping         Keyword row from the database.
-	 * @param  int    $global_max      Global max replacements setting.
-	 * @param  int    $global_nofollow Global nofollow setting.
-	 * @param  int    $global_new_tab  Global new-tab setting.
-	 * @param  int    $case_sensitive  Case sensitivity flag.
-	 * @return string Modified content.
-	 */
-	private function replace_single_keyword( $content, $mapping, $global_max, $global_nofollow, $global_new_tab, $case_sensitive ) {
-		$keyword  = preg_quote( $mapping['keyword'], '/' );
-		$max      = ( (int) $mapping['max_replacements'] > 0 ) ? (int) $mapping['max_replacements'] : $global_max;
-		$nofollow = (int) $mapping['nofollow'] ? true : (bool) $global_nofollow;
-		$new_tab  = (int) $mapping['new_tab'] ? true : (bool) $global_new_tab;
-
-		// Escape URL late, at the point of output.
-		$url       = esc_url( $mapping['target_url'] );
-		$rel_parts = array();
-		if ( $nofollow ) {
-			$rel_parts[] = 'nofollow';
-		}
-		if ( $new_tab ) {
-			$rel_parts[] = 'noopener';
-			$rel_parts[] = 'noreferrer';
-		}
-		$rel_attr    = ! empty( $rel_parts ) ? ' rel="' . implode( ' ', $rel_parts ) . '"' : '';
-		$target_attr = $new_tab ? ' target="_blank"' : '';
-
-		$flags = $case_sensitive ? '' : 'i';
-
 		/*
-		 * Split content into protected and plain-text segments.
+		 * Split content ONCE into protected and plain-text segments.
 		 *
 		 * Protected segments (captured by the regex) include:
-		 *  - Existing <a> ... </a> blocks (DOTALL so nested tags are handled).
-		 *  - <script>, <style>, <code>, <pre>, <textarea> blocks.
-		 *  - HTML comments <!-- ... -->.
-		 *  - Any remaining HTML tag (<...>).
-		 *
-		 * The `s` (DOTALL) flag ensures `.*?` matches across newlines inside
-		 * block-level protected elements.
+		 *  - Existing <a> … </a> blocks (DOTALL so nested tags are handled).
+		 *  - Heading <h1>–<h6> blocks — we don't replace inside headings.
+		 *  - <button>, <label>, <figcaption> blocks.
+		 *  - <script>, <style>, <code>, <pre>, <textarea>, <select>, <option>.
+		 *  - HTML comments <!-- … -->.
+		 *  - Any remaining HTML tag (<…>).
 		 */
 		$protected_pattern = '/'
-			. '(<a\b[^>]*>.*?<\/a>'              // Existing anchor links.
-			. '|<script\b[^>]*>.*?<\/script>'     // Script blocks.
-			. '|<style\b[^>]*>.*?<\/style>'       // Style blocks.
-			. '|<code\b[^>]*>.*?<\/code>'         // Code blocks.
-			. '|<pre\b[^>]*>.*?<\/pre>'           // Preformatted blocks.
-			. '|<textarea\b[^>]*>.*?<\/textarea>' // Textarea blocks.
-			. '|<!--.*?-->'                        // HTML comments.
-			. '|<[^>]+>'                           // Any HTML tag.
+			. '(<a\b[^>]*>.*?<\/a>'                    // Existing anchor links.
+			. '|<h[1-6]\b[^>]*>.*?<\/h[1-6]>'          // Headings h1–h6.
+			. '|<button\b[^>]*>.*?<\/button>'           // Button elements.
+			. '|<label\b[^>]*>.*?<\/label>'             // Label elements.
+			. '|<figcaption\b[^>]*>.*?<\/figcaption>'   // Figcaption elements.
+			. '|<script\b[^>]*>.*?<\/script>'           // Script blocks.
+			. '|<style\b[^>]*>.*?<\/style>'             // Style blocks.
+			. '|<code\b[^>]*>.*?<\/code>'               // Code blocks.
+			. '|<pre\b[^>]*>.*?<\/pre>'                 // Preformatted blocks.
+			. '|<textarea\b[^>]*>.*?<\/textarea>'       // Textarea blocks.
+			. '|<select\b[^>]*>.*?<\/select>'           // Select blocks.
+			. '|<option\b[^>]*>.*?<\/option>'           // Option elements.
+			. '|<!--.*?-->'                              // HTML comments.
+			. '|<[^>]+>'                                 // Any HTML tag.
 			. ')/is';
 
 		$parts = preg_split( $protected_pattern, $content, -1, PREG_SPLIT_DELIM_CAPTURE );
@@ -164,32 +129,77 @@ class FPP_Interlinking_Replacer {
 			return $content;
 		}
 
-		$count           = 0;
-		$keyword_pattern = '/\b(' . $keyword . ')\b/' . $flags;
+		// Track total links inserted for the per-post cap.
+		$total_links = 0;
 
-		foreach ( $parts as &$part ) {
-			// Skip protected segments (anything starting with <).
-			if ( isset( $part[0] ) && '<' === $part[0] ) {
+		// Process each keyword against the pre-split segments.
+		foreach ( $keywords as $mapping ) {
+			// Self-link prevention: skip when the target URL matches the current post.
+			if ( $current_url && $this->urls_match( $current_url, $mapping['target_url'] ) ) {
 				continue;
 			}
 
-			if ( $max > 0 && $count >= $max ) {
+			// Check global per-post cap.
+			if ( $max_per_post > 0 && $total_links >= $max_per_post ) {
 				break;
 			}
 
-			$part = preg_replace_callback(
-				$keyword_pattern,
-				function ( $matches ) use ( $url, $rel_attr, $target_attr, &$count, $max ) {
-					if ( $max > 0 && $count >= $max ) {
-						return $matches[0];
-					}
-					$count++;
-					return '<a href="' . $url . '"' . $rel_attr . $target_attr . '>' . esc_html( $matches[1] ) . '</a>';
-				},
-				$part
-			);
+			$keyword  = preg_quote( $mapping['keyword'], '/' );
+			$max      = ( (int) $mapping['max_replacements'] > 0 ) ? (int) $mapping['max_replacements'] : $global_max;
+			$nofollow = (int) $mapping['nofollow'] ? true : (bool) $global_nofollow;
+			$new_tab  = (int) $mapping['new_tab'] ? true : (bool) $global_new_tab;
+
+			// Escape URL late, at the point of output.
+			$url       = esc_url( $mapping['target_url'] );
+			$rel_parts = array();
+			if ( $nofollow ) {
+				$rel_parts[] = 'nofollow';
+			}
+			if ( $new_tab ) {
+				$rel_parts[] = 'noopener';
+				$rel_parts[] = 'noreferrer';
+			}
+			$rel_attr    = ! empty( $rel_parts ) ? ' rel="' . implode( ' ', $rel_parts ) . '"' : '';
+			$target_attr = $new_tab ? ' target="_blank"' : '';
+
+			$flags           = $case_sensitive ? '' : 'i';
+			$keyword_pattern = '/\b(' . $keyword . ')\b/' . $flags;
+			$kw_count        = 0;
+
+			foreach ( $parts as &$part ) {
+				// Skip protected segments (anything starting with <).
+				if ( isset( $part[0] ) && '<' === $part[0] ) {
+					continue;
+				}
+
+				// Per-keyword cap reached.
+				if ( $max > 0 && $kw_count >= $max ) {
+					break;
+				}
+
+				// Per-post cap reached.
+				if ( $max_per_post > 0 && $total_links >= $max_per_post ) {
+					break;
+				}
+
+				$part = preg_replace_callback(
+					$keyword_pattern,
+					function ( $matches ) use ( $url, $rel_attr, $target_attr, &$kw_count, $max, &$total_links, $max_per_post ) {
+						if ( $max > 0 && $kw_count >= $max ) {
+							return $matches[0];
+						}
+						if ( $max_per_post > 0 && $total_links >= $max_per_post ) {
+							return $matches[0];
+						}
+						$kw_count++;
+						$total_links++;
+						return '<a href="' . $url . '"' . $rel_attr . $target_attr . '>' . esc_html( $matches[1] ) . '</a>';
+					},
+					$part
+				);
+			}
+			unset( $part );
 		}
-		unset( $part );
 
 		return implode( '', $parts );
 	}
@@ -200,6 +210,7 @@ class FPP_Interlinking_Replacer {
 	 * Cache is busted whenever keywords or settings change via the admin.
 	 *
 	 * @since  1.0.0
+	 *
 	 * @return array<array<string,mixed>>
 	 */
 	private function get_cached_keywords() {
@@ -215,6 +226,7 @@ class FPP_Interlinking_Replacer {
 	 * Parse the excluded-posts option into an array of integer IDs.
 	 *
 	 * @since  1.0.0
+	 *
 	 * @return int[]
 	 */
 	private function get_excluded_post_ids() {
@@ -233,6 +245,22 @@ class FPP_Interlinking_Replacer {
 		}
 
 		return $ids;
+	}
+
+	/**
+	 * Retrieve the allowed post types for keyword replacement.
+	 *
+	 * @since  2.1.0
+	 *
+	 * @return string[] Array of post type slugs.
+	 */
+	private function get_allowed_post_types() {
+		$setting = get_option( 'fpp_interlinking_post_types', 'post,page' );
+		if ( empty( $setting ) ) {
+			return array();
+		}
+
+		return array_filter( array_map( 'trim', explode( ',', $setting ) ) );
 	}
 
 	/**

@@ -39,6 +39,8 @@ function fpp_interlinking_uninstall_site() {
 	delete_option( 'fpp_interlinking_new_tab' );
 	delete_option( 'fpp_interlinking_case_sensitive' );
 	delete_option( 'fpp_interlinking_excluded_posts' );
+	delete_option( 'fpp_interlinking_max_links_per_post' );
+	delete_option( 'fpp_interlinking_post_types' );
 	delete_option( 'fpp_interlinking_db_version' );
 
 	// AI options.

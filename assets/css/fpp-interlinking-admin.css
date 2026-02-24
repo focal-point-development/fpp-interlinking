@@ -417,3 +417,97 @@
 	float: none;
 	margin: 0;
 }
+
+/* ── Table Toolbar (Bulk Actions, Import/Export, Search) ────────── */
+
+.fpp-table-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+	padding: 8px 0;
+}
+
+.fpp-toolbar-left {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.fpp-toolbar-left select {
+	height: 32px;
+	min-width: 140px;
+}
+
+.fpp-toolbar-center {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.fpp-toolbar-center .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: text-bottom;
+	margin-right: 2px;
+}
+
+.fpp-toolbar-right {
+	margin-left: auto;
+}
+
+.fpp-toolbar-right #fpp-keyword-search {
+	min-width: 220px;
+}
+
+/* Import label styled as button */
+.fpp-import-label {
+	cursor: pointer;
+	display: inline-flex !important;
+	align-items: center;
+	gap: 2px;
+}
+
+/* Checkbox column */
+.wp-list-table .column-cb {
+	width: 2.2em;
+	padding: 8px 2px 8px 10px;
+}
+
+.wp-list-table .column-cb input[type="checkbox"] {
+	margin: 0;
+}
+
+/* ── Keywords Pagination ────────────────────────────────────────── */
+
+#fpp-keywords-pagination .tablenav-pages {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 0;
+}
+
+.fpp-keywords-info {
+	color: #646970;
+	font-size: 13px;
+}
+
+/* ── Responsive: stack toolbar on narrow screens ────────────────── */
+
+@media screen and (max-width: 782px) {
+	.fpp-table-toolbar {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.fpp-toolbar-right {
+		margin-left: 0;
+		width: 100%;
+	}
+
+	.fpp-toolbar-right #fpp-keyword-search {
+		width: 100%;
+	}
+}

@@ -4,11 +4,12 @@
 	var FPP = {
 
 		suggestionsPage: 1,
-		searchTimer: null,
-		aiSearchTimer: null,
+		keywordsPage: 1,
+		keywordsSearch: '',
 
 		init: function() {
 			this.bindEvents();
+			this.loadKeywordsTable(1);
 		},
 
 		bindEvents: function() {
@@ -24,8 +25,8 @@
 			$(document).on('click', '.fpp-delete-keyword', this.deleteKeyword);
 			$(document).on('click', '.fpp-toggle-keyword', this.toggleKeyword);
 
-			// Quick-Add Post Search.
-			$('#fpp-post-search').on('input', FPP.debounce(FPP.searchPosts, 300));
+			// Quick-Add Post Search — each debounced function gets its own timer.
+			$('#fpp-post-search').on('input', FPP.createDebounce(FPP.searchPosts, 300));
 			$(document).on('click', '.fpp-search-result-item', this.selectSearchResult);
 			$(document).on('click', this.dismissSearchDropdown);
 
@@ -49,7 +50,7 @@
 
 			// AI Keyword Extraction.
 			$('#fpp-toggle-ai-extract').on('click', function() { FPP.toggleSection($(this), '#fpp-ai-extract-content'); });
-			$('#fpp-ai-extract-search').on('input', FPP.debounce(FPP.aiExtractSearch, 300));
+			$('#fpp-ai-extract-search').on('input', FPP.createDebounce(FPP.aiExtractSearch, 300));
 			$(document).on('click', '.fpp-ai-extract-result-item', FPP.aiExtractSelectPost);
 			$('#fpp-ai-extract-btn').on('click', FPP.aiExtractKeywords);
 
@@ -76,16 +77,33 @@
 					$(this).trigger('click');
 				}
 			});
+
+			// Keywords table: search, pagination, bulk ops, import/export.
+			$('#fpp-keyword-search').on('input', FPP.createDebounce(function() {
+				FPP.keywordsSearch = $.trim($('#fpp-keyword-search').val());
+				FPP.loadKeywordsTable(1);
+			}, 400));
+			$('#fpp-keywords-prev').on('click', function() { FPP.loadKeywordsTable(FPP.keywordsPage - 1); });
+			$('#fpp-keywords-next').on('click', function() { FPP.loadKeywordsTable(FPP.keywordsPage + 1); });
+			$('#fpp-select-all').on('change', FPP.toggleSelectAll);
+			$('#fpp-bulk-apply').on('click', FPP.applyBulkAction);
+			$('#fpp-export-csv').on('click', FPP.exportCsv);
+			$('#fpp-import-csv-file').on('change', FPP.importCsv);
 		},
 
 		/* ── Utility ──────────────────────────────────────────────────── */
 
-		debounce: function(func, delay) {
+		/**
+		 * Create a debounced function with its own private timer.
+		 * Fixes the shared-timer bug from the old debounce().
+		 */
+		createDebounce: function(func, delay) {
+			var timer = null;
 			return function() {
 				var context = this;
 				var args = arguments;
-				clearTimeout(FPP.searchTimer);
-				FPP.searchTimer = setTimeout(function() {
+				clearTimeout(timer);
+				timer = setTimeout(function() {
 					func.apply(context, args);
 				}, delay);
 			};
@@ -93,9 +111,6 @@
 
 		/**
 		 * Generic section toggle with aria-expanded support.
-		 *
-		 * @param {jQuery} $toggle The toggle heading element.
-		 * @param {string} contentSelector CSS selector for the content panel.
 		 */
 		toggleSection: function($toggle, contentSelector) {
 			var $content = $(contentSelector);
@@ -123,14 +138,22 @@
 			if (maxVal > cap) maxVal = cap;
 			$('#fpp-global-max-replacements').val(maxVal);
 
+			// Gather selected post types.
+			var postTypes = [];
+			$('.fpp-post-type-checkbox:checked').each(function() {
+				postTypes.push($(this).val());
+			});
+
 			$.post(fppInterlinking.ajax_url, {
-				action:           'fpp_interlinking_save_settings',
-				nonce:            fppInterlinking.nonce,
-				max_replacements: maxVal,
-				nofollow:         $('#fpp-global-nofollow').is(':checked') ? 1 : 0,
-				new_tab:          $('#fpp-global-new-tab').is(':checked') ? 1 : 0,
-				case_sensitive:   $('#fpp-global-case-sensitive').is(':checked') ? 1 : 0,
-				excluded_posts:   $('#fpp-global-excluded-posts').val()
+				action:             'fpp_interlinking_save_settings',
+				nonce:              fppInterlinking.nonce,
+				max_replacements:   maxVal,
+				nofollow:           $('#fpp-global-nofollow').is(':checked') ? 1 : 0,
+				new_tab:            $('#fpp-global-new-tab').is(':checked') ? 1 : 0,
+				case_sensitive:     $('#fpp-global-case-sensitive').is(':checked') ? 1 : 0,
+				excluded_posts:     $('#fpp-global-excluded-posts').val(),
+				max_links_per_post: $('#fpp-global-max-links-per-post').val() || 0,
+				post_types:         postTypes.join(',')
 			}, function(response) {
 				$btn.prop('disabled', false).text(fppInterlinking.i18n.save_settings);
 				if (response.success) {
@@ -142,6 +165,202 @@
 				$btn.prop('disabled', false).text(fppInterlinking.i18n.save_settings);
 				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
 			});
+		},
+
+		/* ── AJAX Keywords Table (Paginated) ─────────────────────────── */
+
+		loadKeywordsTable: function(page) {
+			var $tbody = $('#fpp-keywords-tbody');
+			$tbody.html('<tr><td colspan="8"><span class="spinner is-active" style="float:none;"></span> ' + FPP.escHtml(fppInterlinking.i18n.loading) + '</td></tr>');
+
+			$.post(fppInterlinking.ajax_url, {
+				action:  'fpp_interlinking_load_keywords',
+				nonce:   fppInterlinking.nonce,
+				page:    page,
+				search:  FPP.keywordsSearch
+			}, function(response) {
+				if (response.success) {
+					FPP.keywordsPage = response.data.page;
+					FPP.renderKeywordsTable(response.data);
+				} else {
+					$tbody.html('<tr><td colspan="8">' + FPP.escHtml(response.data.message) + '</td></tr>');
+				}
+			}).fail(function() {
+				$tbody.html('<tr><td colspan="8">' + FPP.escHtml(fppInterlinking.i18n.request_failed) + '</td></tr>');
+			});
+		},
+
+		renderKeywordsTable: function(data) {
+			var $tbody = $('#fpp-keywords-tbody');
+			$tbody.empty();
+			$('#fpp-select-all').prop('checked', false);
+
+			if (data.keywords.length === 0) {
+				$('#fpp-keywords-table').hide();
+				$('#fpp-no-keywords').show();
+				$('#fpp-keywords-pagination').hide();
+				return;
+			}
+
+			$('#fpp-keywords-table').show();
+			$('#fpp-no-keywords').hide();
+
+			$.each(data.keywords, function(i, kw) {
+				var row = '<tr id="fpp-keyword-row-' + kw.id + '">'
+					+ '<td class="column-cb check-column"><input type="checkbox" class="fpp-kw-check" value="' + kw.id + '" /></td>'
+					+ '<td class="column-keyword">' + FPP.escHtml(kw.keyword) + '</td>'
+					+ '<td class="column-url"><a href="' + FPP.escAttr(kw.target_url) + '" target="_blank" rel="noopener noreferrer">' + FPP.escHtml(kw.target_url) + '</a></td>'
+					+ '<td class="column-nofollow">' + (parseInt(kw.nofollow) ? 'Yes' : 'No') + '</td>'
+					+ '<td class="column-newtab">' + (parseInt(kw.new_tab) ? 'Yes' : 'No') + '</td>'
+					+ '<td class="column-max">' + (parseInt(kw.max_replacements) ? FPP.escHtml(String(kw.max_replacements)) : 'Global') + '</td>'
+					+ '<td class="column-active"><span class="' + (parseInt(kw.is_active) ? 'fpp-badge-active' : 'fpp-badge-inactive') + '">'
+					+ FPP.escHtml(parseInt(kw.is_active) ? fppInterlinking.i18n.active : fppInterlinking.i18n.inactive) + '</span></td>'
+					+ '<td class="column-actions">'
+					+ '<button type="button" class="button button-small fpp-edit-keyword"'
+					+ ' data-id="' + kw.id + '"'
+					+ ' data-keyword="' + FPP.escAttr(kw.keyword) + '"'
+					+ ' data-url="' + FPP.escAttr(kw.target_url) + '"'
+					+ ' data-nofollow="' + kw.nofollow + '"'
+					+ ' data-newtab="' + kw.new_tab + '"'
+					+ ' data-max="' + kw.max_replacements + '">Edit</button> '
+					+ '<button type="button" class="button button-small fpp-scan-keyword"'
+					+ ' data-id="' + kw.id + '"'
+					+ ' data-keyword="' + FPP.escAttr(kw.keyword) + '">Scan</button> '
+					+ '<button type="button" class="button button-small fpp-toggle-keyword"'
+					+ ' data-id="' + kw.id + '" data-active="' + kw.is_active + '">'
+					+ FPP.escHtml(parseInt(kw.is_active) ? fppInterlinking.i18n.disable : fppInterlinking.i18n.enable) + '</button> '
+					+ '<button type="button" class="button button-small fpp-delete-keyword"'
+					+ ' data-id="' + kw.id + '">Delete</button>'
+					+ '</td></tr>';
+
+				var scanRow = '<tr id="fpp-scan-results-row-' + kw.id + '" class="fpp-scan-results-row" style="display:none;">'
+					+ '<td colspan="8"><div class="fpp-scan-results-container">'
+					+ '<p class="fpp-scan-results-loading" style="display:none;"><span class="spinner is-active"></span> ' + FPP.escHtml(fppInterlinking.i18n.scanning) + '</p>'
+					+ '<div class="fpp-scan-results-list"></div>'
+					+ '</div></td></tr>';
+
+				$tbody.append(row).append(scanRow);
+			});
+
+			// Pagination.
+			if (data.pages > 1) {
+				var startItem = (data.page - 1) * 20 + 1;
+				var endItem = Math.min(data.page * 20, data.total);
+				var info = fppInterlinking.i18n.keyword_page_info
+					.replace('%1$d', startItem)
+					.replace('%2$d', endItem)
+					.replace('%3$d', data.total);
+				$('.fpp-keywords-info').text(info);
+				$('#fpp-keywords-prev').prop('disabled', data.page <= 1);
+				$('#fpp-keywords-next').prop('disabled', data.page >= data.pages);
+				$('#fpp-keywords-pagination').show();
+			} else {
+				$('#fpp-keywords-pagination').hide();
+			}
+		},
+
+		/* ── Bulk Operations ──────────────────────────────────────────── */
+
+		toggleSelectAll: function() {
+			var checked = $(this).is(':checked');
+			$('.fpp-kw-check').prop('checked', checked);
+		},
+
+		applyBulkAction: function(e) {
+			e.preventDefault();
+			var action = $('#fpp-bulk-action').val();
+			if (!action) {
+				FPP.showNotice('error', fppInterlinking.i18n.bulk_select_action);
+				return;
+			}
+
+			var ids = [];
+			$('.fpp-kw-check:checked').each(function() {
+				ids.push($(this).val());
+			});
+
+			if (ids.length === 0) {
+				FPP.showNotice('error', fppInterlinking.i18n.bulk_select_items);
+				return;
+			}
+
+			if (action === 'delete' && !confirm(fppInterlinking.i18n.bulk_confirm_delete)) {
+				return;
+			}
+
+			$.post(fppInterlinking.ajax_url, {
+				action:      'fpp_interlinking_bulk_action',
+				nonce:       fppInterlinking.nonce,
+				bulk_action: action,
+				ids:         ids
+			}, function(response) {
+				if (response.success) {
+					FPP.showNotice('success', response.data.message);
+					FPP.loadKeywordsTable(FPP.keywordsPage);
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		/* ── CSV Import / Export ──────────────────────────────────────── */
+
+		exportCsv: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			$btn.prop('disabled', true);
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_export_csv',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				$btn.prop('disabled', false);
+				if (response.success) {
+					// Trigger download via Blob.
+					var blob = new Blob([response.data.csv], { type: 'text/csv;charset=utf-8;' });
+					var link = document.createElement('a');
+					link.href = URL.createObjectURL(blob);
+					link.download = response.data.filename;
+					link.click();
+					URL.revokeObjectURL(link.href);
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false);
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		importCsv: function() {
+			var file = this.files[0];
+			if (!file) return;
+
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				var csvData = e.target.result;
+
+				$.post(fppInterlinking.ajax_url, {
+					action:   'fpp_interlinking_import_csv',
+					nonce:    fppInterlinking.nonce,
+					csv_data: csvData
+				}, function(response) {
+					if (response.success) {
+						FPP.showNotice('success', response.data.message);
+						FPP.loadKeywordsTable(1);
+					} else {
+						FPP.showNotice('error', response.data.message);
+					}
+				}).fail(function() {
+					FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+				});
+			};
+			reader.readAsText(file);
+
+			// Reset file input so the same file can be re-imported.
+			$(this).val('');
 		},
 
 		/* ── Keyword CRUD ─────────────────────────────────────────────── */
@@ -180,10 +399,8 @@
 				$btn.prop('disabled', false).text(fppInterlinking.i18n.add_keyword);
 				if (response.success) {
 					FPP.showNotice('success', response.data.message);
-					FPP.appendKeywordRow(response.data.keyword);
 					FPP.clearForm();
-					$('#fpp-no-keywords').hide();
-					$('#fpp-keywords-table').show();
+					FPP.loadKeywordsTable(FPP.keywordsPage);
 				} else {
 					FPP.showNotice('error', response.data.message);
 				}
@@ -249,8 +466,8 @@
 				$btn.prop('disabled', false).text(fppInterlinking.i18n.update_keyword);
 				if (response.success) {
 					FPP.showNotice('success', response.data.message);
-					FPP.updateKeywordRow(response.data.keyword);
 					FPP.cancelEdit();
+					FPP.loadKeywordsTable(FPP.keywordsPage);
 				} else {
 					FPP.showNotice('error', response.data.message);
 				}
@@ -284,14 +501,8 @@
 				id:     id
 			}, function(response) {
 				if (response.success) {
-					$('#fpp-keyword-row-' + id + ', #fpp-scan-results-row-' + id).fadeOut(300, function() {
-						$(this).remove();
-						if ($('#fpp-keywords-tbody tr:not(.fpp-scan-results-row)').length === 0) {
-							$('#fpp-keywords-table').hide();
-							$('#fpp-no-keywords').show();
-						}
-					});
 					FPP.showNotice('success', response.data.message);
+					FPP.loadKeywordsTable(FPP.keywordsPage);
 				} else {
 					FPP.showNotice('error', response.data.message);
 				}
@@ -304,7 +515,7 @@
 			e.preventDefault();
 			var $btn      = $(this);
 			var id        = $btn.data('id');
-			var isActive  = $btn.data('active');
+			var isActive  = parseInt($btn.data('active'));
 			var newActive = isActive ? 0 : 1;
 
 			$.post(fppInterlinking.ajax_url, {
@@ -314,17 +525,8 @@
 				is_active: newActive
 			}, function(response) {
 				if (response.success) {
-					$btn.data('active', newActive);
-					$btn.text(newActive ? fppInterlinking.i18n.disable : fppInterlinking.i18n.enable);
-
-					var $row   = $('#fpp-keyword-row-' + id);
-					var $badge = $row.find('.column-active span');
-					$badge
-						.removeClass('fpp-badge-active fpp-badge-inactive')
-						.addClass(newActive ? 'fpp-badge-active' : 'fpp-badge-inactive')
-						.text(newActive ? fppInterlinking.i18n.active : fppInterlinking.i18n.inactive);
-
 					FPP.showNotice('success', response.data.message);
+					FPP.loadKeywordsTable(FPP.keywordsPage);
 				} else {
 					FPP.showNotice('error', response.data.message);
 				}
@@ -334,58 +536,6 @@
 		},
 
 		/* ── DOM Helpers ──────────────────────────────────────────────── */
-
-		appendKeywordRow: function(kw) {
-			var row = '<tr id="fpp-keyword-row-' + kw.id + '">'
-				+ '<td class="column-keyword">' + FPP.escHtml(kw.keyword) + '</td>'
-				+ '<td class="column-url"><a href="' + FPP.escAttr(kw.target_url) + '" target="_blank" rel="noopener noreferrer">' + FPP.escHtml(kw.target_url) + '</a></td>'
-				+ '<td class="column-nofollow">' + (kw.nofollow ? 'Yes' : 'No') + '</td>'
-				+ '<td class="column-newtab">' + (kw.new_tab ? 'Yes' : 'No') + '</td>'
-				+ '<td class="column-max">' + (kw.max_replacements ? FPP.escHtml(String(kw.max_replacements)) : 'Global') + '</td>'
-				+ '<td class="column-active"><span class="fpp-badge-active">' + FPP.escHtml(fppInterlinking.i18n.active) + '</span></td>'
-				+ '<td class="column-actions">'
-				+ '<button type="button" class="button button-small fpp-edit-keyword"'
-				+ ' data-id="' + kw.id + '"'
-				+ ' data-keyword="' + FPP.escAttr(kw.keyword) + '"'
-				+ ' data-url="' + FPP.escAttr(kw.target_url) + '"'
-				+ ' data-nofollow="' + kw.nofollow + '"'
-				+ ' data-newtab="' + kw.new_tab + '"'
-				+ ' data-max="' + kw.max_replacements + '">Edit</button> '
-				+ '<button type="button" class="button button-small fpp-scan-keyword"'
-				+ ' data-id="' + kw.id + '"'
-				+ ' data-keyword="' + FPP.escAttr(kw.keyword) + '">Scan</button> '
-				+ '<button type="button" class="button button-small fpp-toggle-keyword"'
-				+ ' data-id="' + kw.id + '" data-active="1">' + FPP.escHtml(fppInterlinking.i18n.disable) + '</button> '
-				+ '<button type="button" class="button button-small fpp-delete-keyword"'
-				+ ' data-id="' + kw.id + '">Delete</button>'
-				+ '</td></tr>';
-
-			var scanRow = '<tr id="fpp-scan-results-row-' + kw.id + '" class="fpp-scan-results-row" style="display:none;">'
-				+ '<td colspan="7"><div class="fpp-scan-results-container">'
-				+ '<p class="fpp-scan-results-loading" style="display:none;"><span class="spinner is-active"></span> ' + FPP.escHtml(fppInterlinking.i18n.scanning) + '</p>'
-				+ '<div class="fpp-scan-results-list"></div>'
-				+ '</div></td></tr>';
-
-			$('#fpp-keywords-tbody').append(row).append(scanRow);
-		},
-
-		updateKeywordRow: function(kw) {
-			var $row = $('#fpp-keyword-row-' + kw.id);
-			$row.find('.column-keyword').text(kw.keyword);
-			$row.find('.column-url a').attr('href', kw.target_url).text(kw.target_url);
-			$row.find('.column-nofollow').text(kw.nofollow ? 'Yes' : 'No');
-			$row.find('.column-newtab').text(kw.new_tab ? 'Yes' : 'No');
-			$row.find('.column-max').text(kw.max_replacements ? kw.max_replacements : 'Global');
-
-			var $editBtn = $row.find('.fpp-edit-keyword');
-			$editBtn.data('keyword', kw.keyword);
-			$editBtn.data('url', kw.target_url);
-			$editBtn.data('nofollow', kw.nofollow);
-			$editBtn.data('newtab', kw.new_tab);
-			$editBtn.data('max', kw.max_replacements);
-
-			$row.find('.fpp-scan-keyword').data('keyword', kw.keyword);
-		},
 
 		clearForm: function() {
 			$('#fpp-keyword').val('');
@@ -548,9 +698,9 @@
 				max_replacements: $editBtn.data('max')
 			}, function(response) {
 				if (response.success) {
-					FPP.updateKeywordRow(response.data.keyword);
 					FPP.showNotice('success', response.data.message);
 					$('#fpp-scan-results-row-' + keywordId).slideUp(200);
+					FPP.loadKeywordsTable(FPP.keywordsPage);
 				} else {
 					FPP.showNotice('error', response.data.message);
 					$btn.prop('disabled', false).text(fppInterlinking.i18n.use_this_url);
@@ -1055,9 +1205,8 @@
 			}, function(response) {
 				if (response.success) {
 					$btn.replaceWith('<span class="fpp-badge-active">' + FPP.escHtml(fppInterlinking.i18n.ai_added) + '</span>');
-					FPP.appendKeywordRow(response.data.keyword);
-					$('#fpp-no-keywords').hide();
-					$('#fpp-keywords-table').show();
+					// Refresh keywords table to show the new keyword.
+					FPP.loadKeywordsTable(FPP.keywordsPage);
 				} else {
 					$btn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_mapping);
 					FPP.showNotice('error', response.data.message);
@@ -1068,6 +1217,9 @@
 			});
 		},
 
+		/**
+		 * Add All Mappings — sequential queue to avoid race conditions.
+		 */
 		aiAddAllMappings: function(e) {
 			e.preventDefault();
 			var $btns = $('#fpp-ai-generate-tbody .fpp-ai-add-mapping:not(:disabled)');
@@ -1076,16 +1228,44 @@
 			var $allBtn = $(this);
 			$allBtn.prop('disabled', true).text(fppInterlinking.i18n.adding_all);
 
-			var total = $btns.length;
+			var queue = $btns.toArray();
+			var added = 0;
 
-			$btns.each(function() {
-				$(this).trigger('click');
-			});
+			function processNext() {
+				if (queue.length === 0) {
+					$allBtn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_all);
+					FPP.showNotice('success', fppInterlinking.i18n.ai_added_count.replace('%d', added));
+					FPP.loadKeywordsTable(FPP.keywordsPage);
+					return;
+				}
 
-			setTimeout(function() {
-				$allBtn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_all);
-				FPP.showNotice('success', fppInterlinking.i18n.ai_added_count.replace('%d', total));
-			}, total * 500 + 1000);
+				var btn = queue.shift();
+				var $btn = $(btn);
+				var keyword = $btn.data('keyword');
+				var url = $btn.data('url');
+
+				$btn.prop('disabled', true).text(fppInterlinking.i18n.adding);
+
+				$.post(fppInterlinking.ajax_url, {
+					action:     'fpp_interlinking_ai_add_mapping',
+					nonce:      fppInterlinking.nonce,
+					keyword:    keyword,
+					target_url: url
+				}, function(response) {
+					if (response.success) {
+						$btn.replaceWith('<span class="fpp-badge-active">' + FPP.escHtml(fppInterlinking.i18n.ai_added) + '</span>');
+						added++;
+					} else {
+						$btn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_mapping);
+					}
+					processNext();
+				}).fail(function() {
+					$btn.prop('disabled', false).text(fppInterlinking.i18n.ai_add_mapping);
+					processNext();
+				});
+			}
+
+			processNext();
 		},
 
 		/* ── UI Helpers ───────────────────────────────────────────────── */

@@ -87,8 +87,14 @@ class FPP_Interlinking_Activator {
 		add_option( 'fpp_interlinking_new_tab', 1, '', true );
 		add_option( 'fpp_interlinking_case_sensitive', 0, '', true );
 
+		// Max total links per post – loaded on frontend, autoload = true.
+		add_option( 'fpp_interlinking_max_links_per_post', 0, '', true );
+
 		// Excluded posts – loaded on frontend, autoload = true.
 		add_option( 'fpp_interlinking_excluded_posts', '', '', true );
+
+		// Post types for replacement – loaded on frontend, autoload = true.
+		add_option( 'fpp_interlinking_post_types', 'post,page', '', true );
 
 		// DB version tracking – admin-only, autoload = false.
 		add_option( 'fpp_interlinking_db_version', FPP_INTERLINKING_VERSION, '', false );

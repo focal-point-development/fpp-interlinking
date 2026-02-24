@@ -45,6 +45,12 @@ class FPP_Interlinking_Admin {
 		add_action( 'wp_ajax_fpp_interlinking_ai_content_gaps', array( $this, 'ajax_ai_content_gaps' ) );
 		add_action( 'wp_ajax_fpp_interlinking_ai_auto_generate', array( $this, 'ajax_ai_auto_generate' ) );
 		add_action( 'wp_ajax_fpp_interlinking_ai_add_mapping', array( $this, 'ajax_ai_add_mapping' ) );
+
+		// v2.1.0: Paginated table, bulk ops, import/export.
+		add_action( 'wp_ajax_fpp_interlinking_load_keywords', array( $this, 'ajax_load_keywords' ) );
+		add_action( 'wp_ajax_fpp_interlinking_bulk_action', array( $this, 'ajax_bulk_action' ) );
+		add_action( 'wp_ajax_fpp_interlinking_export_csv', array( $this, 'ajax_export_csv' ) );
+		add_action( 'wp_ajax_fpp_interlinking_import_csv', array( $this, 'ajax_import_csv' ) );
 	}
 
 	/**
@@ -147,6 +153,20 @@ class FPP_Interlinking_Admin {
 				'inactive'               => esc_html__( 'Inactive', 'fpp-interlinking' ),
 				'disable'                => esc_html__( 'Disable', 'fpp-interlinking' ),
 				'enable'                 => esc_html__( 'Enable', 'fpp-interlinking' ),
+				// Bulk operations.
+				'bulk_select_action'     => esc_html__( 'Please select a bulk action.', 'fpp-interlinking' ),
+				'bulk_select_items'      => esc_html__( 'Please select at least one keyword.', 'fpp-interlinking' ),
+				'bulk_confirm_delete'    => esc_html__( 'Are you sure you want to delete the selected keywords?', 'fpp-interlinking' ),
+				'bulk_success'           => esc_html__( 'Bulk action completed successfully.', 'fpp-interlinking' ),
+				// Import/Export.
+				'export_empty'           => esc_html__( 'No keywords to export.', 'fpp-interlinking' ),
+				'import_select_file'     => esc_html__( 'Please select a CSV file to import.', 'fpp-interlinking' ),
+				'import_success'         => esc_html__( 'Import complete: %1$d imported, %2$d skipped, %3$d errors.', 'fpp-interlinking' ),
+				'importing'              => esc_html__( 'Importing...', 'fpp-interlinking' ),
+				// Pagination.
+				'loading'                => esc_html__( 'Loading...', 'fpp-interlinking' ),
+				'no_keywords'            => esc_html__( 'No keyword mappings found.', 'fpp-interlinking' ),
+				'keyword_page_info'      => esc_html__( 'Showing %1$d–%2$d of %3$d', 'fpp-interlinking' ),
 			),
 		) );
 	}
@@ -159,13 +179,16 @@ class FPP_Interlinking_Admin {
 	 * @since 1.0.0
 	 */
 	public function render_admin_page() {
-		$keywords         = FPP_Interlinking_DB::get_all_keywords();
-		$max_replacements = get_option( 'fpp_interlinking_max_replacements', 1 );
-		$nofollow         = get_option( 'fpp_interlinking_nofollow', 0 );
-		$new_tab          = get_option( 'fpp_interlinking_new_tab', 1 );
-		$case_sensitive   = get_option( 'fpp_interlinking_case_sensitive', 0 );
-		$excluded_posts   = get_option( 'fpp_interlinking_excluded_posts', '' );
-		$max_cap          = FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT;
+		$keywords            = FPP_Interlinking_DB::get_all_keywords();
+		$max_replacements    = get_option( 'fpp_interlinking_max_replacements', 1 );
+		$nofollow            = get_option( 'fpp_interlinking_nofollow', 0 );
+		$new_tab             = get_option( 'fpp_interlinking_new_tab', 1 );
+		$case_sensitive      = get_option( 'fpp_interlinking_case_sensitive', 0 );
+		$excluded_posts      = get_option( 'fpp_interlinking_excluded_posts', '' );
+		$max_links_per_post  = get_option( 'fpp_interlinking_max_links_per_post', 0 );
+		$post_types_setting  = get_option( 'fpp_interlinking_post_types', 'post,page' );
+		$active_post_types   = array_map( 'trim', explode( ',', $post_types_setting ) );
+		$max_cap             = FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT;
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -212,6 +235,35 @@ class FPP_Interlinking_Admin {
 									<?php esc_html_e( 'Match keywords with exact case', 'fpp-interlinking' ); ?>
 								</label>
 								<p class="description"><?php esc_html_e( 'When unchecked, "WordPress" will also match "wordpress", "WORDPRESS", etc.', 'fpp-interlinking' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="fpp-global-max-links-per-post"><?php esc_html_e( 'Max links per post', 'fpp-interlinking' ); ?></label></th>
+							<td>
+								<input type="number" id="fpp-global-max-links-per-post" min="0" max="500" value="<?php echo esc_attr( $max_links_per_post ); ?>" class="small-text" />
+								<p class="description"><?php esc_html_e( 'Maximum total auto-generated links per post/page. Set to 0 for unlimited. Recommended: 10–50 for SEO.', 'fpp-interlinking' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th><?php esc_html_e( 'Post types', 'fpp-interlinking' ); ?></th>
+							<td>
+								<fieldset id="fpp-post-types-fieldset">
+									<?php
+									$all_post_types = get_post_types( array( 'public' => true ), 'objects' );
+									foreach ( $all_post_types as $pt ) :
+										if ( 'attachment' === $pt->name ) {
+											continue;
+										}
+									?>
+										<label>
+											<input type="checkbox" class="fpp-post-type-checkbox" value="<?php echo esc_attr( $pt->name ); ?>"
+												<?php checked( in_array( $pt->name, $active_post_types, true ) ); ?> />
+											<?php echo esc_html( $pt->labels->singular_name ); ?>
+											<code>(<?php echo esc_html( $pt->name ); ?>)</code>
+										</label><br />
+									<?php endforeach; ?>
+								</fieldset>
+								<p class="description"><?php esc_html_e( 'Select which post types should have keyword replacement applied.', 'fpp-interlinking' ); ?></p>
 							</td>
 						</tr>
 						<tr>
@@ -289,15 +341,43 @@ class FPP_Interlinking_Admin {
 
 			<hr />
 
-			<!-- Keywords Table -->
+			<!-- Keywords Table (AJAX-powered with pagination, search, bulk ops) -->
 			<div class="fpp-section">
 				<h2><?php esc_html_e( 'Keyword Mappings', 'fpp-interlinking' ); ?></h2>
-				<?php if ( empty( $keywords ) ) : ?>
-					<p id="fpp-no-keywords"><?php esc_html_e( 'No keyword mappings found. Add your first one above.', 'fpp-interlinking' ); ?></p>
-				<?php endif; ?>
-				<table class="wp-list-table widefat fixed striped" id="fpp-keywords-table" <?php echo empty( $keywords ) ? 'style="display:none;"' : ''; ?>>
+
+				<!-- Table toolbar: search, bulk actions, import/export -->
+				<div class="fpp-table-toolbar">
+					<div class="fpp-toolbar-left">
+						<select id="fpp-bulk-action">
+							<option value=""><?php esc_html_e( 'Bulk Actions', 'fpp-interlinking' ); ?></option>
+							<option value="enable"><?php esc_html_e( 'Enable', 'fpp-interlinking' ); ?></option>
+							<option value="disable"><?php esc_html_e( 'Disable', 'fpp-interlinking' ); ?></option>
+							<option value="delete"><?php esc_html_e( 'Delete', 'fpp-interlinking' ); ?></option>
+						</select>
+						<button type="button" id="fpp-bulk-apply" class="button"><?php esc_html_e( 'Apply', 'fpp-interlinking' ); ?></button>
+					</div>
+					<div class="fpp-toolbar-center">
+						<button type="button" id="fpp-export-csv" class="button">
+							<span class="dashicons dashicons-download" aria-hidden="true"></span>
+							<?php esc_html_e( 'Export CSV', 'fpp-interlinking' ); ?>
+						</button>
+						<label class="button fpp-import-label" for="fpp-import-csv-file">
+							<span class="dashicons dashicons-upload" aria-hidden="true"></span>
+							<?php esc_html_e( 'Import CSV', 'fpp-interlinking' ); ?>
+						</label>
+						<input type="file" id="fpp-import-csv-file" accept=".csv" style="display:none;" />
+					</div>
+					<div class="fpp-toolbar-right">
+						<input type="search" id="fpp-keyword-search" class="regular-text"
+							placeholder="<?php esc_attr_e( 'Search keywords...', 'fpp-interlinking' ); ?>" />
+					</div>
+				</div>
+
+				<p id="fpp-no-keywords" style="display:none;"><?php esc_html_e( 'No keyword mappings found. Add your first one above.', 'fpp-interlinking' ); ?></p>
+				<table class="wp-list-table widefat fixed striped" id="fpp-keywords-table">
 					<thead>
 						<tr>
+							<th class="column-cb check-column"><input type="checkbox" id="fpp-select-all" /></th>
 							<th class="column-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
 							<th class="column-url"><?php esc_html_e( 'Target URL', 'fpp-interlinking' ); ?></th>
 							<th class="column-nofollow"><?php esc_html_e( 'Nofollow', 'fpp-interlinking' ); ?></th>
@@ -308,62 +388,17 @@ class FPP_Interlinking_Admin {
 						</tr>
 					</thead>
 					<tbody id="fpp-keywords-tbody">
-						<?php foreach ( $keywords as $kw ) : ?>
-							<tr id="fpp-keyword-row-<?php echo esc_attr( $kw['id'] ); ?>">
-								<td class="column-keyword"><?php echo esc_html( $kw['keyword'] ); ?></td>
-								<td class="column-url">
-									<a href="<?php echo esc_url( $kw['target_url'] ); ?>" target="_blank" rel="noopener noreferrer">
-										<?php echo esc_html( $kw['target_url'] ); ?>
-									</a>
-								</td>
-								<td class="column-nofollow"><?php echo esc_html( $kw['nofollow'] ? __( 'Yes', 'fpp-interlinking' ) : __( 'No', 'fpp-interlinking' ) ); ?></td>
-								<td class="column-newtab"><?php echo esc_html( $kw['new_tab'] ? __( 'Yes', 'fpp-interlinking' ) : __( 'No', 'fpp-interlinking' ) ); ?></td>
-								<td class="column-max"><?php echo $kw['max_replacements'] ? esc_html( $kw['max_replacements'] ) : esc_html__( 'Global', 'fpp-interlinking' ); ?></td>
-								<td class="column-active">
-									<span class="<?php echo $kw['is_active'] ? 'fpp-badge-active' : 'fpp-badge-inactive'; ?>">
-										<?php echo esc_html( $kw['is_active'] ? __( 'Active', 'fpp-interlinking' ) : __( 'Inactive', 'fpp-interlinking' ) ); ?>
-									</span>
-								</td>
-								<td class="column-actions">
-									<button type="button" class="button button-small fpp-edit-keyword"
-										data-id="<?php echo esc_attr( $kw['id'] ); ?>"
-										data-keyword="<?php echo esc_attr( $kw['keyword'] ); ?>"
-										data-url="<?php echo esc_attr( $kw['target_url'] ); ?>"
-										data-nofollow="<?php echo esc_attr( $kw['nofollow'] ); ?>"
-										data-newtab="<?php echo esc_attr( $kw['new_tab'] ); ?>"
-										data-max="<?php echo esc_attr( $kw['max_replacements'] ); ?>">
-										<?php esc_html_e( 'Edit', 'fpp-interlinking' ); ?>
-									</button>
-									<button type="button" class="button button-small fpp-scan-keyword"
-										data-id="<?php echo esc_attr( $kw['id'] ); ?>"
-										data-keyword="<?php echo esc_attr( $kw['keyword'] ); ?>">
-										<?php esc_html_e( 'Scan', 'fpp-interlinking' ); ?>
-									</button>
-									<button type="button" class="button button-small fpp-toggle-keyword"
-										data-id="<?php echo esc_attr( $kw['id'] ); ?>"
-										data-active="<?php echo esc_attr( $kw['is_active'] ); ?>">
-										<?php echo esc_html( $kw['is_active'] ? __( 'Disable', 'fpp-interlinking' ) : __( 'Enable', 'fpp-interlinking' ) ); ?>
-									</button>
-									<button type="button" class="button button-small fpp-delete-keyword"
-										data-id="<?php echo esc_attr( $kw['id'] ); ?>">
-										<?php esc_html_e( 'Delete', 'fpp-interlinking' ); ?>
-									</button>
-								</td>
-							</tr>
-							<tr id="fpp-scan-results-row-<?php echo esc_attr( $kw['id'] ); ?>" class="fpp-scan-results-row" style="display:none;">
-								<td colspan="7">
-									<div class="fpp-scan-results-container">
-										<p class="fpp-scan-results-loading" style="display:none;">
-											<span class="spinner is-active"></span>
-											<?php esc_html_e( 'Scanning...', 'fpp-interlinking' ); ?>
-										</p>
-										<div class="fpp-scan-results-list"></div>
-									</div>
-								</td>
-							</tr>
-						<?php endforeach; ?>
+						<tr><td colspan="8"><span class="spinner is-active" style="float:none;"></span> <?php esc_html_e( 'Loading...', 'fpp-interlinking' ); ?></td></tr>
 					</tbody>
 				</table>
+				<!-- Pagination -->
+				<div id="fpp-keywords-pagination" class="tablenav bottom" style="display:none;">
+					<div class="tablenav-pages">
+						<span class="fpp-keywords-info"></span>
+						<button type="button" id="fpp-keywords-prev" class="button button-small" disabled>&laquo; <?php esc_html_e( 'Previous', 'fpp-interlinking' ); ?></button>
+						<button type="button" id="fpp-keywords-next" class="button button-small"><?php esc_html_e( 'Next', 'fpp-interlinking' ); ?> &raquo;</button>
+					</div>
+				</div>
 			</div>
 
 			<hr />
@@ -839,6 +874,17 @@ class FPP_Interlinking_Admin {
 		update_option( 'fpp_interlinking_case_sensitive', isset( $_POST['case_sensitive'] ) ? absint( $_POST['case_sensitive'] ) : 0 );
 		update_option( 'fpp_interlinking_excluded_posts', isset( $_POST['excluded_posts'] ) ? sanitize_text_field( wp_unslash( $_POST['excluded_posts'] ) ) : '' );
 
+		// Max links per post (0 = unlimited).
+		$max_links = isset( $_POST['max_links_per_post'] ) ? absint( $_POST['max_links_per_post'] ) : 0;
+		if ( $max_links > 500 ) {
+			$max_links = 500;
+		}
+		update_option( 'fpp_interlinking_max_links_per_post', $max_links );
+
+		// Post types.
+		$post_types = isset( $_POST['post_types'] ) ? sanitize_text_field( wp_unslash( $_POST['post_types'] ) ) : 'post,page';
+		update_option( 'fpp_interlinking_post_types', $post_types );
+
 		delete_transient( 'fpp_interlinking_keywords_cache' );
 
 		wp_send_json_success( array( 'message' => __( 'Settings saved successfully.', 'fpp-interlinking' ) ) );
@@ -1099,6 +1145,12 @@ class FPP_Interlinking_Admin {
 			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
 		}
 
+		// Rate limit check.
+		$rate_check = FPP_Interlinking_AI::check_rate_limit();
+		if ( is_wp_error( $rate_check ) ) {
+			wp_send_json_error( array( 'message' => $rate_check->get_error_message() ) );
+		}
+
 		$post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
 
 		if ( ! $post_id ) {
@@ -1143,6 +1195,12 @@ class FPP_Interlinking_Admin {
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		// Rate limit check.
+		$rate_check = FPP_Interlinking_AI::check_rate_limit();
+		if ( is_wp_error( $rate_check ) ) {
+			wp_send_json_error( array( 'message' => $rate_check->get_error_message() ) );
 		}
 
 		$keyword = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
@@ -1206,6 +1264,12 @@ class FPP_Interlinking_Admin {
 			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
 		}
 
+		// Rate limit check.
+		$rate_check = FPP_Interlinking_AI::check_rate_limit();
+		if ( is_wp_error( $rate_check ) ) {
+			wp_send_json_error( array( 'message' => $rate_check->get_error_message() ) );
+		}
+
 		$offset = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
 
 		$result = FPP_Interlinking_AI::analyse_content_gaps( 20, $offset );
@@ -1229,6 +1293,12 @@ class FPP_Interlinking_Admin {
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		// Rate limit check.
+		$rate_check = FPP_Interlinking_AI::check_rate_limit();
+		if ( is_wp_error( $rate_check ) ) {
+			wp_send_json_error( array( 'message' => $rate_check->get_error_message() ) );
 		}
 
 		$offset = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
@@ -1292,5 +1362,193 @@ class FPP_Interlinking_Admin {
 		} else {
 			wp_send_json_error( array( 'message' => __( 'Failed to add keyword.', 'fpp-interlinking' ) ) );
 		}
+	}
+
+	/* ── v2.1.0: Paginated Table, Bulk Ops, Import/Export ────────────── */
+
+	/**
+	 * AJAX: Load keywords with pagination and search.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @return void Sends JSON response and dies.
+	 */
+	public function ajax_load_keywords() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$page     = isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1;
+		$per_page = 20;
+		$search   = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+		$orderby  = isset( $_POST['orderby'] ) ? sanitize_text_field( wp_unslash( $_POST['orderby'] ) ) : 'keyword';
+		$order    = isset( $_POST['order'] ) ? sanitize_text_field( wp_unslash( $_POST['order'] ) ) : 'ASC';
+
+		$result = FPP_Interlinking_DB::get_keywords_paginated( $page, $per_page, $search, $orderby, $order );
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Bulk action on selected keywords.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @return void Sends JSON response and dies.
+	 */
+	public function ajax_bulk_action() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$action = isset( $_POST['bulk_action'] ) ? sanitize_text_field( wp_unslash( $_POST['bulk_action'] ) ) : '';
+		$ids    = isset( $_POST['ids'] ) ? array_map( 'absint', (array) $_POST['ids'] ) : array();
+		$ids    = array_filter( $ids );
+
+		if ( empty( $action ) || empty( $ids ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid bulk action or no items selected.', 'fpp-interlinking' ) ) );
+		}
+
+		$count = 0;
+
+		switch ( $action ) {
+			case 'delete':
+				$count = FPP_Interlinking_DB::bulk_delete( $ids );
+				break;
+
+			case 'enable':
+				$count = FPP_Interlinking_DB::bulk_toggle( $ids, 1 );
+				break;
+
+			case 'disable':
+				$count = FPP_Interlinking_DB::bulk_toggle( $ids, 0 );
+				break;
+
+			default:
+				wp_send_json_error( array( 'message' => __( 'Unknown bulk action.', 'fpp-interlinking' ) ) );
+				return;
+		}
+
+		delete_transient( 'fpp_interlinking_keywords_cache' );
+
+		wp_send_json_success( array(
+			'message' => sprintf(
+				/* translators: %d: number of keywords affected. */
+				__( '%d keyword(s) updated.', 'fpp-interlinking' ),
+				$count
+			),
+			'affected' => $count,
+		) );
+	}
+
+	/**
+	 * AJAX: Export all keywords as CSV.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @return void Sends CSV data as JSON (to be downloaded client-side).
+	 */
+	public function ajax_export_csv() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$keywords = FPP_Interlinking_DB::export_all();
+
+		if ( empty( $keywords ) ) {
+			wp_send_json_error( array( 'message' => __( 'No keywords to export.', 'fpp-interlinking' ) ) );
+		}
+
+		// Build CSV string.
+		$csv = "keyword,target_url,nofollow,new_tab,max_replacements,is_active\n";
+		foreach ( $keywords as $kw ) {
+			$csv .= sprintf(
+				'"%s","%s",%d,%d,%d,%d' . "\n",
+				str_replace( '"', '""', $kw['keyword'] ),
+				str_replace( '"', '""', $kw['target_url'] ),
+				(int) $kw['nofollow'],
+				(int) $kw['new_tab'],
+				(int) $kw['max_replacements'],
+				(int) $kw['is_active']
+			);
+		}
+
+		wp_send_json_success( array(
+			'csv'      => $csv,
+			'filename' => 'wp-interlinking-keywords-' . gmdate( 'Y-m-d' ) . '.csv',
+			'count'    => count( $keywords ),
+		) );
+	}
+
+	/**
+	 * AJAX: Import keywords from uploaded CSV data.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @return void Sends JSON response and dies.
+	 */
+	public function ajax_import_csv() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$csv_data = isset( $_POST['csv_data'] ) ? wp_unslash( $_POST['csv_data'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		if ( empty( $csv_data ) ) {
+			wp_send_json_error( array( 'message' => __( 'No CSV data provided.', 'fpp-interlinking' ) ) );
+		}
+
+		// Parse CSV.
+		$lines = explode( "\n", trim( $csv_data ) );
+		if ( count( $lines ) < 2 ) {
+			wp_send_json_error( array( 'message' => __( 'CSV file is empty or has no data rows.', 'fpp-interlinking' ) ) );
+		}
+
+		// Parse header.
+		$header = str_getcsv( array_shift( $lines ) );
+		$header = array_map( 'trim', $header );
+		$header = array_map( 'strtolower', $header );
+
+		if ( ! in_array( 'keyword', $header, true ) || ! in_array( 'target_url', $header, true ) ) {
+			wp_send_json_error( array( 'message' => __( 'CSV must have "keyword" and "target_url" columns.', 'fpp-interlinking' ) ) );
+		}
+
+		$rows = array();
+		foreach ( $lines as $line ) {
+			$line = trim( $line );
+			if ( empty( $line ) ) {
+				continue;
+			}
+			$values = str_getcsv( $line );
+			$row    = array();
+			foreach ( $header as $i => $key ) {
+				$row[ $key ] = isset( $values[ $i ] ) ? $values[ $i ] : '';
+			}
+			$rows[] = $row;
+		}
+
+		$result = FPP_Interlinking_DB::import_keywords( $rows );
+		delete_transient( 'fpp_interlinking_keywords_cache' );
+
+		wp_send_json_success( array(
+			'message'  => sprintf(
+				/* translators: 1: imported count, 2: skipped count, 3: error count. */
+				__( 'Import complete: %1$d imported, %2$d skipped (duplicates), %3$d errors.', 'fpp-interlinking' ),
+				$result['imported'],
+				$result['skipped'],
+				$result['errors']
+			),
+			'imported' => $result['imported'],
+			'skipped'  => $result['skipped'],
+			'errors'   => $result['errors'],
+		) );
 	}
 }

@@ -211,6 +211,44 @@ class FPP_Interlinking_AI {
 		return (int) get_option( self::OPTION_MAX_TOKENS, 2000 );
 	}
 
+	/* ── Rate Limiting ──────────────────────────────────────────────── */
+
+	/**
+	 * Minimum seconds between AI API calls (per user).
+	 *
+	 * @since 2.1.0
+	 */
+	const RATE_LIMIT_SECONDS = 10;
+
+	/**
+	 * Check if the current user is rate-limited.
+	 *
+	 * Uses a transient keyed by user ID to prevent rapid-fire API calls
+	 * that could result in excessive costs.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @return true|WP_Error True if allowed, WP_Error if rate-limited.
+	 */
+	public static function check_rate_limit() {
+		$user_id       = get_current_user_id();
+		$transient_key = 'fpp_ai_rate_limit_' . $user_id;
+
+		if ( get_transient( $transient_key ) ) {
+			return new \WP_Error(
+				'rate_limited',
+				sprintf(
+					/* translators: %d: number of seconds to wait. */
+					__( 'Please wait %d seconds between AI requests to avoid excessive API costs.', 'fpp-interlinking' ),
+					self::RATE_LIMIT_SECONDS
+				)
+			);
+		}
+
+		set_transient( $transient_key, 1, self::RATE_LIMIT_SECONDS );
+		return true;
+	}
+
 	/* ── Core API Call ───────────────────────────────────────────────── */
 
 	/**
