@@ -28,6 +28,25 @@ class FPP_Interlinking_DB {
 	}
 
 	/**
+	 * Get the configured post types from settings.
+	 *
+	 * Used across admin, AI, analyzer, and replacer classes to ensure
+	 * consistent post type handling everywhere.
+	 *
+	 * @since  3.0.0
+	 *
+	 * @return string[] Array of post type slugs.
+	 */
+	public static function get_configured_post_types() {
+		$setting = get_option( 'fpp_interlinking_post_types', 'post,page' );
+		if ( empty( $setting ) ) {
+			return array( 'post', 'page' );
+		}
+		$types = array_filter( array_map( 'trim', explode( ',', $setting ) ) );
+		return ! empty( $types ) ? $types : array( 'post', 'page' );
+	}
+
+	/**
 	 * Retrieve all keywords, optionally filtered to active-only.
 	 *
 	 * @since  1.0.0

@@ -25,5 +25,8 @@ class FPP_Interlinking_Deactivator {
 	 */
 	public static function deactivate() {
 		delete_transient( 'fpp_interlinking_keywords_cache' );
+
+		// v3.0.0: Clear analytics cron.
+		wp_clear_scheduled_hook( 'fpp_interlinking_purge_analytics' );
 	}
 }

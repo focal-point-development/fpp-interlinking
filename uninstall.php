@@ -29,9 +29,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 function fpp_interlinking_uninstall_site() {
 	global $wpdb;
 
-	// Drop the keywords table.
-	$table_name = $wpdb->prefix . 'fpp_interlinking_keywords';
-	$wpdb->query( "DROP TABLE IF EXISTS {$table_name}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	// Drop tables.
+	$keywords_table = $wpdb->prefix . 'fpp_interlinking_keywords';
+	$clicks_table   = $wpdb->prefix . 'fpp_interlinking_clicks';
+	$wpdb->query( "DROP TABLE IF EXISTS {$keywords_table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$wpdb->query( "DROP TABLE IF EXISTS {$clicks_table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 	// Remove options.
 	delete_option( 'fpp_interlinking_max_replacements' );
@@ -49,8 +51,17 @@ function fpp_interlinking_uninstall_site() {
 	delete_option( 'fpp_interlinking_ai_model' );
 	delete_option( 'fpp_interlinking_ai_max_tokens' );
 
+	// v3.0.0 options.
+	delete_option( 'fpp_interlinking_analysis_engine' );
+	delete_option( 'fpp_interlinking_enable_tracking' );
+	delete_option( 'fpp_interlinking_tracking_retention_days' );
+
 	// Remove transients.
 	delete_transient( 'fpp_interlinking_keywords_cache' );
+	delete_transient( 'fpp_interlinking_content_gaps' );
+
+	// Clear cron.
+	wp_clear_scheduled_hook( 'fpp_interlinking_daily_cleanup' );
 }
 
 // Multisite: iterate every site. Single-site: run once.

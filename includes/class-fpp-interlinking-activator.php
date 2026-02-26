@@ -41,14 +41,16 @@ class FPP_Interlinking_Activator {
 	private static function create_table() {
 		global $wpdb;
 
-		$table_name      = $wpdb->prefix . 'fpp_interlinking_keywords';
 		$charset_collate = $wpdb->get_charset_collate();
 
 		// NOTE: dbDelta() requires:
 		//  - Two spaces between PRIMARY KEY and opening parenthesis.
 		//  - Each column on its own line.
 		//  - KEY statements must use a name.
-		$sql = "CREATE TABLE {$table_name} (
+
+		// Keywords table.
+		$keywords_table = $wpdb->prefix . 'fpp_interlinking_keywords';
+		$sql_keywords = "CREATE TABLE {$keywords_table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			keyword varchar(255) NOT NULL,
 			target_url varchar(2083) NOT NULL,
@@ -62,8 +64,23 @@ class FPP_Interlinking_Activator {
 			KEY keyword_idx (keyword)
 		) {$charset_collate};";
 
+		// v3.0.0: Analytics clicks table.
+		$clicks_table = $wpdb->prefix . 'fpp_interlinking_clicks';
+		$sql_clicks = "CREATE TABLE {$clicks_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			keyword_id bigint(20) unsigned NOT NULL,
+			post_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			target_url varchar(2083) NOT NULL,
+			clicked_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY keyword_id_idx (keyword_id),
+			KEY post_id_idx (post_id),
+			KEY clicked_at_idx (clicked_at)
+		) {$charset_collate};";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		dbDelta( $sql );
+		dbDelta( $sql_keywords );
+		dbDelta( $sql_clicks );
 	}
 
 	/**
@@ -103,5 +120,17 @@ class FPP_Interlinking_Activator {
 		add_option( 'fpp_interlinking_ai_provider', 'openai', '', false );
 		add_option( 'fpp_interlinking_ai_model', 'gpt-4o-mini', '', false );
 		add_option( 'fpp_interlinking_ai_max_tokens', 2000, '', false );
+
+		// v3.0.0: Analysis engine – 'internal' (default) or 'ai'.
+		add_option( 'fpp_interlinking_analysis_engine', 'internal', '', false );
+
+		// v3.0.0: Analytics settings.
+		add_option( 'fpp_interlinking_enable_tracking', 1, '', true );
+		add_option( 'fpp_interlinking_tracking_retention_days', 90, '', false );
+
+		// v3.0.0: Schedule daily analytics purge cron.
+		if ( ! wp_next_scheduled( 'fpp_interlinking_purge_analytics' ) ) {
+			wp_schedule_event( time(), 'daily', 'fpp_interlinking_purge_analytics' );
+		}
 	}
 }

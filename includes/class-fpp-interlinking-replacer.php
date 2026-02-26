@@ -182,9 +182,16 @@ class FPP_Interlinking_Replacer {
 					break;
 				}
 
+				// v3.0.0: Build tracking data attributes for click analytics.
+				$tracking_attr = '';
+				if ( (int) get_option( 'fpp_interlinking_enable_tracking', 1 ) ) {
+					$tracking_attr = ' data-fpp-keyword-id="' . esc_attr( $mapping['id'] ) . '"'
+						. ' data-fpp-post-id="' . esc_attr( $post_id ? $post_id : 0 ) . '"';
+				}
+
 				$part = preg_replace_callback(
 					$keyword_pattern,
-					function ( $matches ) use ( $url, $rel_attr, $target_attr, &$kw_count, $max, &$total_links, $max_per_post ) {
+					function ( $matches ) use ( $url, $rel_attr, $target_attr, $tracking_attr, &$kw_count, $max, &$total_links, $max_per_post ) {
 						if ( $max > 0 && $kw_count >= $max ) {
 							return $matches[0];
 						}
@@ -193,7 +200,7 @@ class FPP_Interlinking_Replacer {
 						}
 						$kw_count++;
 						$total_links++;
-						return '<a href="' . $url . '"' . $rel_attr . $target_attr . '>' . esc_html( $matches[1] ) . '</a>';
+						return '<a href="' . $url . '"' . $rel_attr . $target_attr . $tracking_attr . '>' . esc_html( $matches[1] ) . '</a>';
 					},
 					$part
 				);

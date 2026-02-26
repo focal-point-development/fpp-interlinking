@@ -512,9 +512,12 @@ class FPP_Interlinking_AI {
 	 * @param int $offset     Offset for pagination.
 	 * @return array|WP_Error Gap analysis results or WP_Error.
 	 */
-	public static function analyse_content_gaps( $batch_size = 20, $offset = 0 ) {
+	public static function analyse_content_gaps( $batch_size = 20, $offset = 0, $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
 		$query = new \WP_Query( array(
-			'post_type'      => array( 'post', 'page' ),
+			'post_type'      => $post_types,
 			'post_status'    => 'publish',
 			'posts_per_page' => $batch_size,
 			'offset'         => $offset,
@@ -619,9 +622,12 @@ class FPP_Interlinking_AI {
 	 * @param int $offset     Offset for batch processing.
 	 * @return array|WP_Error Proposed mappings or WP_Error.
 	 */
-	public static function auto_generate_mappings( $batch_size = 20, $offset = 0 ) {
+	public static function auto_generate_mappings( $batch_size = 20, $offset = 0, $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
 		$query = new \WP_Query( array(
-			'post_type'      => array( 'post', 'page' ),
+			'post_type'      => $post_types,
 			'post_status'    => 'publish',
 			'posts_per_page' => $batch_size,
 			'offset'         => $offset,

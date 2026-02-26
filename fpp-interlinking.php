@@ -3,7 +3,7 @@
  * Plugin Name:       WP Interlinking
  * Plugin URI:        https://developer.wordpress.org/plugins/
  * Description:       AI-powered SEO internal linking. Map keywords to URLs with automatic replacement, AI keyword extraction, relevance scoring, content gap analysis, and auto-generated interlinking strategies. Supports OpenAI and Anthropic.
- * Version:           2.1.0
+ * Version:           3.0.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            FPP
@@ -24,8 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin constants.
  */
-define( 'FPP_INTERLINKING_VERSION', '2.1.0' );
-define( 'FPP_INTERLINKING_DB_VERSION', '1.1.0' );
+define( 'FPP_INTERLINKING_VERSION', '3.0.0' );
+define( 'FPP_INTERLINKING_DB_VERSION', '2.0.0' );
 define( 'FPP_INTERLINKING_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -38,6 +38,8 @@ require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-acti
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-deactivator.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-db.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-ai.php';
+require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-analyzer.php';
+require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-analytics.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-admin.php';
 require_once FPP_INTERLINKING_PLUGIN_DIR . 'includes/class-fpp-interlinking-replacer.php';
 
@@ -92,8 +94,19 @@ if ( is_admin() ) {
 }
 
 /**
- * Initialize front-end content replacement.
+ * Initialize front-end content replacement and analytics tracking.
  */
 if ( ! is_admin() ) {
 	new FPP_Interlinking_Replacer();
+
+	// v3.0.0: Click tracking.
+	if ( get_option( 'fpp_interlinking_enable_tracking', 1 ) ) {
+		new FPP_Interlinking_Analytics();
+		add_action( 'wp_enqueue_scripts', array( 'FPP_Interlinking_Analytics', 'enqueue_tracker' ) );
+	}
 }
+
+/**
+ * v3.0.0: Daily analytics data purge via WP-Cron.
+ */
+add_action( 'fpp_interlinking_purge_analytics', array( 'FPP_Interlinking_Analytics', 'purge_old_data' ) );

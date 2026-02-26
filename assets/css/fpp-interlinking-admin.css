@@ -1,3 +1,68 @@
+/* ── Tab Navigation ──────────────────────────────────────────────── */
+
+.fpp-nav-tabs {
+	margin-bottom: 0;
+}
+
+.fpp-tab-content {
+	padding: 20px 0;
+}
+
+/* ── Dashboard ──────────────────────────────────────────────────── */
+
+.fpp-stat-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+.fpp-stat-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 20px;
+	text-align: center;
+}
+
+.fpp-stat-value {
+	display: block;
+	font-size: 28px;
+	font-weight: 600;
+	color: #1d2327;
+	line-height: 1.2;
+}
+
+.fpp-stat-label {
+	display: block;
+	font-size: 13px;
+	color: #646970;
+	margin-top: 4px;
+}
+
+.fpp-dashboard-actions {
+	margin-bottom: 24px;
+}
+
+.fpp-dashboard-actions .button {
+	margin-right: 8px;
+	margin-bottom: 4px;
+}
+
+.fpp-dashboard-actions .button .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: text-bottom;
+	margin-right: 2px;
+}
+
+.fpp-dashboard-recent {
+	margin-bottom: 20px;
+}
+
+/* ── Sections ───────────────────────────────────────────────────── */
+
 .fpp-section {
 	margin-bottom: 20px;
 }
@@ -16,7 +81,8 @@
 	margin-top: 0;
 }
 
-/* Table column widths */
+/* ── Table column widths ────────────────────────────────────────── */
+
 .wp-list-table .column-keyword {
 	width: 16%;
 }
@@ -38,7 +104,8 @@
 	width: 25%;
 }
 
-/* Status badges */
+/* ── Status badges ──────────────────────────────────────────────── */
+
 .fpp-badge-active {
 	color: #00a32a;
 	font-weight: 600;
@@ -49,19 +116,22 @@
 	font-weight: 600;
 }
 
-/* Action buttons spacing */
+/* ── Action buttons spacing ─────────────────────────────────────── */
+
 .column-actions .button {
 	margin-right: 4px;
 	margin-bottom: 4px;
 }
 
-/* Per-mapping overrides fieldset */
+/* ── Per-mapping overrides fieldset ─────────────────────────────── */
+
 .fpp-add-keyword-section fieldset label {
 	display: inline-block;
 	margin-bottom: 6px;
 }
 
-/* Notice positioning */
+/* ── Notice positioning ─────────────────────────────────────────── */
+
 #fpp-notices {
 	margin-top: 10px;
 }
@@ -270,7 +340,42 @@
 	50% { background-color: #fcf9e8; }
 }
 
-/* ── AI Sections ────────────────────────────────────────────────── */
+/* ── Analysis Header & Engine Badge ─────────────────────────────── */
+
+.fpp-analysis-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 16px;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.fpp-analysis-header .description {
+	margin: 0;
+	flex: 1;
+}
+
+.fpp-engine-badge {
+	display: inline-block;
+	padding: 4px 12px;
+	border-radius: 12px;
+	font-weight: 600;
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.fpp-engine-internal {
+	background: #d4edda;
+	color: #155724;
+}
+
+.fpp-engine-ai {
+	background: #ede9fe;
+	color: #5b21b6;
+}
+
+/* ── Analysis Sections (AI / Internal) ──────────────────────────── */
 
 .fpp-ai-section .fpp-section-toggle,
 .fpp-ai-settings-section .fpp-section-toggle {
@@ -418,6 +523,85 @@
 	margin: 0;
 }
 
+/* AI config section (shown/hidden via JS) */
+.fpp-ai-config-section .form-table {
+	margin-top: 0;
+}
+
+/* ── Analytics ──────────────────────────────────────────────────── */
+
+.fpp-period-selector {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+}
+
+.fpp-period-btn {
+	min-width: 80px;
+	text-align: center;
+}
+
+.fpp-period-btn.active {
+	background: #2271b1;
+	color: #fff;
+	border-color: #2271b1;
+}
+
+.fpp-period-btn.active:hover,
+.fpp-period-btn.active:focus {
+	background: #135e96;
+	border-color: #135e96;
+	color: #fff;
+}
+
+.fpp-analytics-section {
+	margin-bottom: 24px;
+}
+
+.fpp-analytics-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 24px;
+}
+
+/* Bar chart */
+.fpp-bar-chart {
+	display: flex;
+	align-items: flex-end;
+	gap: 3px;
+	height: 140px;
+	padding: 10px 0;
+	border-bottom: 1px solid #c3c4c7;
+}
+
+.fpp-bar-col {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-width: 0;
+}
+
+.fpp-bar {
+	width: 100%;
+	max-width: 24px;
+	background: #2271b1;
+	border-radius: 2px 2px 0 0;
+	transition: height 0.3s ease;
+}
+
+.fpp-bar-label {
+	font-size: 10px;
+	color: #646970;
+	margin-top: 4px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+	text-align: center;
+}
+
 /* ── Table Toolbar (Bulk Actions, Import/Export, Search) ────────── */
 
 .fpp-table-toolbar {
@@ -494,7 +678,7 @@
 	font-size: 13px;
 }
 
-/* ── Responsive: stack toolbar on narrow screens ────────────────── */
+/* ── Responsive ─────────────────────────────────────────────────── */
 
 @media screen and (max-width: 782px) {
 	.fpp-table-toolbar {
@@ -508,6 +692,33 @@
 	}
 
 	.fpp-toolbar-right #fpp-keyword-search {
+		width: 100%;
+	}
+
+	.fpp-stat-cards {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.fpp-analytics-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.fpp-analysis-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.fpp-stat-cards {
+		grid-template-columns: 1fr;
+	}
+
+	.fpp-period-selector {
+		flex-direction: column;
+	}
+
+	.fpp-period-btn {
 		width: 100%;
 	}
 }
