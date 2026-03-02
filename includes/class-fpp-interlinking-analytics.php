@@ -256,7 +256,7 @@ class FPP_Interlinking_Analytics {
 		$imp_where = self::period_where( $period, 'i.impression_date', $start_date, $end_date );
 
 		$results = $wpdb->get_results( $wpdb->prepare(
-			"SELECT c.keyword_id, k.keyword, k.target_url, COUNT(*) as click_count,
+			"SELECT c.keyword_id, k.keyword, k.target_url, COUNT(*) as clicks,
 			        COUNT(DISTINCT c.post_id) as unique_posts,
 			        COALESCE(imp.impressions, 0) as impressions
 			 FROM {$table} c
@@ -269,7 +269,7 @@ class FPP_Interlinking_Analytics {
 			 ) imp ON imp.keyword_id = c.keyword_id
 			 WHERE 1=1 {$where}
 			 GROUP BY c.keyword_id
-			 ORDER BY click_count DESC
+			 ORDER BY clicks DESC
 			 LIMIT %d",
 			$limit
 		), ARRAY_A );
@@ -277,7 +277,7 @@ class FPP_Interlinking_Analytics {
 		if ( $results ) {
 			foreach ( $results as &$row ) {
 				$row['ctr'] = $row['impressions'] > 0
-					? round( ( $row['click_count'] / $row['impressions'] ) * 100, 2 )
+					? round( ( $row['clicks'] / $row['impressions'] ) * 100, 2 )
 					: 0;
 			}
 			unset( $row );
@@ -303,12 +303,12 @@ class FPP_Interlinking_Analytics {
 		$where = self::period_where( $period, 'c.clicked_at', $start_date, $end_date );
 
 		$results = $wpdb->get_results( $wpdb->prepare(
-			"SELECT k.keyword, c.target_url, COUNT(*) as click_count
+			"SELECT k.keyword, c.target_url, COUNT(*) as clicks
 			 FROM {$table} c
 			 LEFT JOIN {$wpdb->prefix}fpp_interlinking_keywords k ON k.id = c.keyword_id
 			 WHERE 1=1 {$where}
 			 GROUP BY c.keyword_id, c.target_url
-			 ORDER BY click_count DESC
+			 ORDER BY clicks DESC
 			 LIMIT %d",
 			$limit
 		), ARRAY_A );
@@ -333,13 +333,13 @@ class FPP_Interlinking_Analytics {
 		$where = self::period_where( $period, 'c.clicked_at', $start_date, $end_date );
 
 		$results = $wpdb->get_results( $wpdb->prepare(
-			"SELECT c.post_id, p.post_title, p.post_type, COUNT(*) as click_count,
+			"SELECT c.post_id, p.post_title, p.post_type, COUNT(*) as clicks,
 			        COUNT(DISTINCT c.keyword_id) as unique_keywords
 			 FROM {$table} c
 			 LEFT JOIN {$wpdb->posts} p ON p.ID = c.post_id
 			 WHERE c.post_id > 0 {$where}
 			 GROUP BY c.post_id
-			 ORDER BY click_count DESC
+			 ORDER BY clicks DESC
 			 LIMIT %d",
 			$limit
 		), ARRAY_A );
@@ -422,13 +422,13 @@ class FPP_Interlinking_Analytics {
 		$where = self::period_where( $period, 'c.clicked_at', $start_date, $end_date );
 
 		$results = $wpdb->get_results(
-			"SELECT p.post_type, COUNT(*) as click_count,
+			"SELECT p.post_type, COUNT(*) as clicks,
 			        COUNT(DISTINCT c.keyword_id) as keyword_count
 			 FROM {$table} c
 			 LEFT JOIN {$wpdb->posts} p ON p.ID = c.post_id
 			 WHERE c.post_id > 0 {$where}
 			 GROUP BY p.post_type
-			 ORDER BY click_count DESC",
+			 ORDER BY clicks DESC",
 			ARRAY_A
 		);
 
@@ -562,7 +562,7 @@ class FPP_Interlinking_Analytics {
 					fputcsv( $output, array(
 						$row['keyword'],
 						$row['target_url'],
-						$row['click_count'],
+						$row['clicks'],
 						$row['impressions'],
 						$row['ctr'],
 						$row['unique_posts'],
@@ -577,7 +577,7 @@ class FPP_Interlinking_Analytics {
 					fputcsv( $output, array(
 						$row['post_title'],
 						$row['post_type'],
-						$row['click_count'],
+						$row['clicks'],
 						$row['unique_keywords'],
 					) );
 				}
@@ -596,7 +596,7 @@ class FPP_Interlinking_Analytics {
 				fputcsv( $output, array( 'Keyword', 'Target URL', 'Clicks' ) );
 				$data = self::get_top_links( 100, $period, $start_date, $end_date );
 				foreach ( $data as $row ) {
-					fputcsv( $output, array( $row['keyword'], $row['target_url'], $row['click_count'] ) );
+					fputcsv( $output, array( $row['keyword'], $row['target_url'], $row['clicks'] ) );
 				}
 				break;
 		}
