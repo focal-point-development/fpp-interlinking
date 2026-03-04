@@ -17,6 +17,8 @@
 			this.initCurrentTab();
 		},
 
+		activeSubtab: 'extract',
+
 		initCurrentTab: function() {
 			var tab = this.getCurrentTab();
 			if (tab === 'keywords') {
@@ -25,6 +27,9 @@
 				this.loadDashboard();
 			} else if (tab === 'analytics') {
 				this.loadAnalytics('30d');
+			} else if (tab === 'analysis') {
+				// Auto-run health check on Analysis tab load.
+				this.runHealthCheck();
 			}
 		},
 
@@ -61,11 +66,11 @@
 			$(document).on('click', '#fpp-suggestions-next', function() { FPP.loadSuggestionsPage(FPP.suggestionsPage + 1); });
 			$(document).on('click', '.fpp-add-suggestion', this.addSuggestion);
 
-			// Analysis section toggles.
-			$(document).on('click', '#fpp-toggle-ai-extract', function() { FPP.toggleSection($(this), '#fpp-ai-extract-content'); });
-			$(document).on('click', '#fpp-toggle-ai-score', function() { FPP.toggleSection($(this), '#fpp-ai-score-content'); });
-			$(document).on('click', '#fpp-toggle-ai-gaps', function() { FPP.toggleSection($(this), '#fpp-ai-gaps-content'); });
-			$(document).on('click', '#fpp-toggle-ai-generate', function() { FPP.toggleSection($(this), '#fpp-ai-generate-content'); });
+			// v5.0.0: Sub-tab navigation + health/orphans/distribution.
+			$(document).on('click', '.fpp-subtab', FPP.switchAnalysisSubtab);
+			$(document).on('click', '#fpp-run-health-check', function() { FPP.runHealthCheck(); });
+			$(document).on('click', '#fpp-detect-orphans-btn', FPP.detectOrphans);
+			$(document).on('click', '#fpp-analyze-distribution-btn', FPP.analyzeDistribution);
 
 			// Analysis Tools (use dispatcher endpoints).
 			$(document).on('input', '#fpp-ai-extract-search', FPP.createDebounce(FPP.aiExtractSearch, 300));
@@ -1570,11 +1575,44 @@
 		},
 
 		showNotice: function(type, message) {
-			var cssClass = (type === 'success') ? 'notice-success' : 'notice-error';
-			var $notice  = $('<div class="notice ' + cssClass + ' is-dismissible" role="alert"><p>' + FPP.escHtml(message) + '</p></div>');
-			$('#fpp-notices').html('').append($notice);
-			$('html, body').animate({ scrollTop: 0 }, 200);
-			setTimeout(function() { $notice.fadeOut(400, function() { $(this).remove(); }); }, 4000);
+			// v5.0.0: Use toast notifications instead of inline notices.
+			FPP.showToast(type, message);
+		},
+
+		showToast: function(type, message) {
+			var $container = $('.fpp-toast-container');
+			if (!$container.length) {
+				$container = $('<div class="fpp-toast-container"></div>').appendTo('body');
+			}
+			var cssClass = 'fpp-toast toast-' + type;
+			var $toast = $('<div class="' + cssClass + '">' +
+				'<span>' + FPP.escHtml(message) + '</span>' +
+				'<button class="fpp-toast-dismiss" type="button">&times;</button>' +
+				'</div>');
+			$container.append($toast);
+			$toast.find('.fpp-toast-dismiss').on('click', function() {
+				$toast.addClass('fpp-toast-out');
+				setTimeout(function() { $toast.remove(); }, 300);
+			});
+			setTimeout(function() {
+				$toast.addClass('fpp-toast-out');
+				setTimeout(function() { $toast.remove(); }, 300);
+			}, 5000);
+		},
+
+		formatNumber: function(num) {
+			if (typeof num !== 'number') num = parseInt(num, 10) || 0;
+			return num.toLocaleString();
+		},
+
+		btnLoading: function($btn, text) {
+			$btn.data('orig-html', $btn.html());
+			$btn.prop('disabled', true).html('<span class="fpp-btn-spinner"></span> ' + FPP.escHtml(text));
+		},
+
+		btnReset: function($btn) {
+			var orig = $btn.data('orig-html');
+			$btn.prop('disabled', false).html(orig || $btn.text());
 		},
 
 		escHtml: function(str) {
@@ -1701,6 +1739,240 @@
 					});
 				});
 			});
+		},
+
+		/* ── v4.0.0: Sparkline Mini Charts ──────────────────────────── */
+
+		/* ── v5.0.0: Analysis Sub-Tabs ─────────────────────────────────── */
+
+		switchAnalysisSubtab: function() {
+			var subtab = $(this).data('subtab');
+			if (!subtab) return;
+
+			$('.fpp-subtab').removeClass('active');
+			$(this).addClass('active');
+
+			$('.fpp-subtab-panel').removeClass('active');
+			$('.fpp-subtab-panel[data-panel="' + subtab + '"]').addClass('active').hide().fadeIn(200);
+
+			FPP.activeSubtab = subtab;
+		},
+
+		/* ── v5.0.0: Health Dashboard ──────────────────────────────────── */
+
+		runHealthCheck: function() {
+			var $btn = $('#fpp-run-health-check');
+			FPP.btnLoading($btn, fppInterlinking.i18n.health_running || 'Checking...');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_health',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderHealthDashboard(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderHealthDashboard: function(data) {
+			var score = data.score || 0;
+			var grade = data.grade || 'F';
+
+			// Determine gauge color.
+			var color;
+			if (score >= 90) color = '#00a32a';
+			else if (score >= 75) color = '#2271b1';
+			else if (score >= 60) color = '#dba617';
+			else color = '#d63638';
+
+			// Animate the gauge.
+			var $gauge = $('#fpp-health-gauge');
+			$gauge.css({ '--score': score, '--gauge-color': color });
+			$('#fpp-health-score-num').text(score).css('color', color);
+			$('#fpp-health-grade').text(grade).css('background', color);
+
+			// Render breakdown bars.
+			var html = '';
+			if (data.breakdown && data.breakdown.length) {
+				for (var i = 0; i < data.breakdown.length; i++) {
+					var item = data.breakdown[i];
+					html += '<div class="fpp-breakdown-item status-' + FPP.escAttr(item.status) + '">';
+					html += '<span class="fpp-breakdown-signal">' + FPP.escHtml(item.signal) + '</span>';
+					html += '<div class="fpp-breakdown-bar"><div class="fpp-breakdown-fill" style="width: ' + item.score + '%;"></div></div>';
+					html += '<span class="fpp-breakdown-score">' + item.score + '</span>';
+					html += '</div>';
+				}
+			}
+			$('#fpp-health-breakdown').html(html);
+
+			// Render metric cards from breakdown data.
+			if (data.breakdown && data.breakdown.length >= 4) {
+				$('#fpp-metric-orphans').text(data.breakdown[0].score >= 90 ? 'Low' : data.breakdown[0].score >= 50 ? 'Medium' : 'High');
+				$('#fpp-metric-avg-links').text(data.breakdown[1].score >= 75 ? 'Good' : data.breakdown[1].score >= 50 ? 'Fair' : 'Low');
+				$('#fpp-metric-coverage').text(data.breakdown[2].score + '%');
+				$('#fpp-metric-active').text(data.breakdown[4] ? data.breakdown[4].score + '%' : '—');
+			}
+
+			// Render recommendations.
+			FPP.renderRecommendations(data.breakdown || []);
+		},
+
+		renderRecommendations: function(breakdown) {
+			var $container = $('#fpp-recommendations');
+			var $list = $('#fpp-recommendations-list');
+			var html = '';
+			var count = 0;
+
+			for (var i = 0; i < breakdown.length; i++) {
+				var item = breakdown[i];
+				if (item.status === 'good') continue;
+				if (count >= 5) break;
+
+				var priority = item.status === 'critical' ? 'high' : 'medium';
+				html += '<div class="fpp-recommendation-item">';
+				html += '<span class="fpp-priority-badge priority-' + priority + '">' + FPP.escHtml(priority) + '</span>';
+				html += '<span>' + FPP.escHtml(item.recommendation) + '</span>';
+				html += '</div>';
+				count++;
+			}
+
+			if (count > 0) {
+				$list.html(html);
+				$container.show();
+			} else {
+				$list.html('<div class="fpp-recommendation-item"><span class="fpp-priority-badge priority-low">good</span><span>Your interlinking health looks great! Keep it up.</span></div>');
+				$container.show();
+			}
+		},
+
+		/* ── v5.0.0: Orphan Pages ──────────────────────────────────────── */
+
+		detectOrphans: function() {
+			var $btn = $('#fpp-detect-orphans-btn');
+			FPP.btnLoading($btn, fppInterlinking.i18n.detecting_orphans || 'Detecting...');
+			$('#fpp-orphans-summary').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_orphans',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderOrphanResults(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderOrphanResults: function(data) {
+			var orphans = data.orphan_pages || [];
+			var summary = '';
+
+			if (orphans.length === 0) {
+				summary = fppInterlinking.i18n.no_orphans || 'No orphan pages found!';
+				$('#fpp-orphans-summary').text(summary);
+				$('#fpp-orphans-results').hide();
+				FPP.showToast('success', summary);
+				return;
+			}
+
+			summary = (fppInterlinking.i18n.orphans_found || '%1$d orphan pages found (%2$s%% of total)')
+				.replace('%1$d', orphans.length)
+				.replace('%2$s', data.orphan_percentage);
+			$('#fpp-orphans-summary').text(summary);
+
+			var html = '';
+			for (var i = 0; i < orphans.length; i++) {
+				var o = orphans[i];
+				html += '<tr>';
+				html += '<td><a href="' + FPP.escAttr(o.url) + '" target="_blank">' + FPP.escHtml(o.title) + '</a></td>';
+				html += '<td>' + FPP.escHtml(o.type) + '</td>';
+				html += '<td>' + FPP.formatNumber(o.word_count) + '</td>';
+				html += '<td><a href="' + FPP.escAttr(o.url) + '" target="_blank" class="button button-small">' + FPP.escHtml(fppInterlinking.i18n.view_post || 'View') + '</a></td>';
+				html += '</tr>';
+			}
+			$('#fpp-orphans-tbody').html(html);
+			$('#fpp-orphans-results').show();
+		},
+
+		/* ── v5.0.0: Link Distribution ─────────────────────────────────── */
+
+		analyzeDistribution: function() {
+			var $btn = $('#fpp-analyze-distribution-btn');
+			FPP.btnLoading($btn, fppInterlinking.i18n.analyzing_distribution || 'Analysing...');
+			$('#fpp-distribution-summary').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_distribution',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderDistributionResults(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderDistributionResults: function(data) {
+			var pages = data.pages || [];
+			var summary = (fppInterlinking.i18n.distribution_summary || '%1$d pages analysed')
+				.replace('%1$d', data.total_pages || 0);
+			$('#fpp-distribution-summary').text(summary);
+
+			// Stats cards.
+			$('#fpp-dist-avg-in').text(data.avg_inbound || 0);
+			$('#fpp-dist-avg-out').text(data.avg_outbound || 0);
+			$('#fpp-dist-under').text(data.under_linked || 0);
+			$('#fpp-dist-over').text(data.over_linked || 0);
+			$('#fpp-distribution-stats').show();
+
+			if (pages.length === 0) {
+				$('#fpp-distribution-results').hide();
+				return;
+			}
+
+			// Compute max inbound for bar scaling.
+			var maxIn = 1;
+			for (var i = 0; i < pages.length; i++) {
+				if (pages[i].inbound > maxIn) maxIn = pages[i].inbound;
+			}
+
+			var html = '';
+			var limit = Math.min(pages.length, 50); // Show top 50.
+			for (var j = 0; j < limit; j++) {
+				var p = pages[j];
+				var statusLabel = p.status === 'under-linked'
+					? (fppInterlinking.i18n.under_linked || 'Under-linked')
+					: (p.status === 'over-linked'
+						? (fppInterlinking.i18n.over_linked || 'Over-linked')
+						: (fppInterlinking.i18n.normal || 'Normal'));
+				var barWidth = maxIn > 0 ? Math.round((p.inbound / maxIn) * 100) : 0;
+
+				html += '<tr>';
+				html += '<td><a href="' + FPP.escAttr(p.url) + '" target="_blank">' + FPP.escHtml(p.title) + '</a></td>';
+				html += '<td>' + FPP.escHtml(p.type) + '</td>';
+				html += '<td>' + p.inbound + ' <span class="fpp-dist-bar"><span class="fpp-dist-bar-fill" style="width:' + barWidth + '%"></span></span></td>';
+				html += '<td>' + p.outbound + '</td>';
+				html += '<td><span class="fpp-link-status status-' + FPP.escAttr(p.status) + '">' + FPP.escHtml(statusLabel) + '</span></td>';
+				html += '</tr>';
+			}
+			$('#fpp-distribution-tbody').html(html);
+			$('#fpp-distribution-results').show();
 		},
 
 		/* ── v4.0.0: Sparkline Mini Charts ──────────────────────────── */

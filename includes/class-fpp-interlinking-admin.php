@@ -65,6 +65,12 @@ class FPP_Interlinking_Admin {
 		// v4.0.0: AJAX tab loading and analytics CSV export.
 		add_action( 'wp_ajax_fpp_interlinking_load_tab', array( $this, 'ajax_load_tab' ) );
 		add_action( 'wp_ajax_fpp_interlinking_export_analytics_csv', array( $this, 'ajax_export_analytics_csv' ) );
+
+		// v5.0.0: Smart SEO analysis endpoints.
+		add_action( 'wp_ajax_fpp_interlinking_analyze_health', array( $this, 'ajax_analyze_health' ) );
+		add_action( 'wp_ajax_fpp_interlinking_analyze_orphans', array( $this, 'ajax_analyze_orphans' ) );
+		add_action( 'wp_ajax_fpp_interlinking_analyze_distribution', array( $this, 'ajax_analyze_distribution' ) );
+		add_action( 'wp_ajax_fpp_interlinking_analyze_seo_content', array( $this, 'ajax_analyze_seo_content' ) );
 	}
 
 	/**
@@ -210,6 +216,21 @@ class FPP_Interlinking_Admin {
 				'no_analytics_empty'     => esc_html__( 'No click data yet. Links will be tracked automatically once visitors start clicking.', 'fpp-interlinking' ),
 				'no_recent_empty'        => esc_html__( 'No recent clicks. Activity will appear here as visitors interact with your interlinks.', 'fpp-interlinking' ),
 				'run_analysis_empty'     => esc_html__( 'Run an analysis to discover keyword opportunities and interlinking gaps.', 'fpp-interlinking' ),
+				// v5.0.0 additions.
+				'health_running'         => esc_html__( 'Running health check...', 'fpp-interlinking' ),
+				'health_score'           => esc_html__( 'Site Health Score', 'fpp-interlinking' ),
+				'orphan_pages'           => esc_html__( 'Orphan Pages', 'fpp-interlinking' ),
+				'detecting_orphans'      => esc_html__( 'Detecting orphan pages...', 'fpp-interlinking' ),
+				'orphans_found'          => esc_html__( '%1$d orphan pages found (%2$s%% of total)', 'fpp-interlinking' ),
+				'no_orphans'             => esc_html__( 'No orphan pages found — all pages have inbound links!', 'fpp-interlinking' ),
+				'analyzing_distribution' => esc_html__( 'Analysing link distribution...', 'fpp-interlinking' ),
+				'distribution_summary'   => esc_html__( '%1$d pages analysed', 'fpp-interlinking' ),
+				'under_linked'           => esc_html__( 'Under-linked', 'fpp-interlinking' ),
+				'over_linked'            => esc_html__( 'Over-linked', 'fpp-interlinking' ),
+				'normal'                 => esc_html__( 'Normal', 'fpp-interlinking' ),
+				'view_post'              => esc_html__( 'View', 'fpp-interlinking' ),
+				'create_mapping'         => esc_html__( 'Create Mapping', 'fpp-interlinking' ),
+				'recommendations'        => esc_html__( 'Smart Recommendations', 'fpp-interlinking' ),
 			),
 		) );
 	}
@@ -501,162 +522,269 @@ class FPP_Interlinking_Admin {
 		$engine_label = 'ai' === $engine ? __( 'AI Engine', 'fpp-interlinking' ) : __( 'Internal Engine', 'fpp-interlinking' );
 		$engine_class = 'ai' === $engine ? 'fpp-engine-ai' : 'fpp-engine-internal';
 		?>
-		<div class="fpp-analysis-header">
-			<p class="description">
-				<?php esc_html_e( 'Analyse your content to discover keyword opportunities and interlinking gaps.', 'fpp-interlinking' ); ?>
-			</p>
-			<span class="fpp-engine-badge <?php echo esc_attr( $engine_class ); ?>" id="fpp-engine-badge">
-				<?php echo esc_html( $engine_label ); ?>
-			</span>
-		</div>
 
-		<!-- Keyword Extraction -->
-		<div class="fpp-section fpp-ai-section fpp-ai-extract-section">
-			<h2 class="fpp-section-toggle" id="fpp-toggle-ai-extract" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-extract-content">
-				<span class="dashicons dashicons-lightbulb" aria-hidden="true"></span>
-				<?php esc_html_e( 'Extract Keywords', 'fpp-interlinking' ); ?>
-				<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
-			</h2>
-			<div class="fpp-section-content" id="fpp-ai-extract-content" role="region" aria-labelledby="fpp-toggle-ai-extract" style="display:none;">
-				<p class="description"><?php esc_html_e( 'Select a post or page to analyse its content and extract SEO keywords for interlinking.', 'fpp-interlinking' ); ?></p>
-				<div class="fpp-ai-controls">
-					<div class="fpp-search-wrapper">
-						<input type="text" id="fpp-ai-extract-search" class="regular-text"
-							placeholder="<?php esc_attr_e( 'Search for a post to analyse...', 'fpp-interlinking' ); ?>"
-							autocomplete="off" />
-						<div id="fpp-ai-extract-search-results" class="fpp-search-dropdown" style="display:none;"></div>
+		<!-- Site Health Overview -->
+		<div class="fpp-health-overview" id="fpp-health-overview">
+			<div class="fpp-health-gauge-wrap">
+				<div class="fpp-health-gauge" id="fpp-health-gauge" style="--score: 0; --gauge-color: #dcdcde;">
+					<div class="fpp-health-gauge-inner">
+						<span class="fpp-health-score" id="fpp-health-score-num">—</span>
+						<span class="fpp-health-grade" id="fpp-health-grade">—</span>
 					</div>
-					<input type="hidden" id="fpp-ai-extract-post-id" value="" />
-					<span id="fpp-ai-extract-selected" class="fpp-ai-selected-post"></span>
-					<button type="button" id="fpp-ai-extract-btn" class="button button-primary" disabled>
-						<span class="dashicons dashicons-lightbulb"></span>
-						<?php esc_html_e( 'Extract Keywords', 'fpp-interlinking' ); ?>
-					</button>
 				</div>
-				<div id="fpp-ai-extract-results" class="fpp-ai-results" style="display:none;">
-					<table class="wp-list-table widefat fixed striped">
-						<thead>
-							<tr>
-								<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-relevance"><?php esc_html_e( 'Relevance', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
-							</tr>
-						</thead>
-						<tbody id="fpp-ai-extract-tbody"></tbody>
-					</table>
+			</div>
+			<div class="fpp-health-details">
+				<h3>
+					<?php esc_html_e( 'Site Health Score', 'fpp-interlinking' ); ?>
+					<span class="fpp-engine-badge <?php echo esc_attr( $engine_class ); ?>" id="fpp-engine-badge" style="font-size: 11px; vertical-align: middle; margin-left: 8px;">
+						<?php echo esc_html( $engine_label ); ?>
+					</span>
+				</h3>
+				<div class="fpp-health-breakdown" id="fpp-health-breakdown">
+					<p class="description"><?php esc_html_e( 'Click "Run Health Check" to analyse your site\'s interlinking SEO health.', 'fpp-interlinking' ); ?></p>
+				</div>
+				<div style="margin-top: 14px;">
+					<button type="button" id="fpp-run-health-check" class="button button-primary">
+						<span class="dashicons dashicons-heart" style="margin-top: 4px;"></span>
+						<?php esc_html_e( 'Run Health Check', 'fpp-interlinking' ); ?>
+					</button>
 				</div>
 			</div>
 		</div>
 
-		<hr />
-
-		<!-- Relevance Scoring -->
-		<div class="fpp-section fpp-ai-section fpp-ai-score-section">
-			<h2 class="fpp-section-toggle" id="fpp-toggle-ai-score" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-score-content">
-				<span class="dashicons dashicons-chart-bar" aria-hidden="true"></span>
-				<?php esc_html_e( 'Relevance Scoring', 'fpp-interlinking' ); ?>
-				<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
-			</h2>
-			<div class="fpp-section-content" id="fpp-ai-score-content" role="region" aria-labelledby="fpp-toggle-ai-score" style="display:none;">
-				<p class="description"><?php esc_html_e( 'Enter a keyword to find and score the most relevant pages to link to.', 'fpp-interlinking' ); ?></p>
-				<div class="fpp-ai-controls">
-					<input type="text" id="fpp-ai-score-keyword" class="regular-text"
-						placeholder="<?php esc_attr_e( 'Enter keyword to score...', 'fpp-interlinking' ); ?>" />
-					<button type="button" id="fpp-ai-score-btn" class="button button-primary">
-						<span class="dashicons dashicons-chart-bar"></span>
-						<?php esc_html_e( 'Score Relevance', 'fpp-interlinking' ); ?>
-					</button>
-				</div>
-				<div id="fpp-ai-score-results" class="fpp-ai-results" style="display:none;">
-					<table class="wp-list-table widefat fixed striped">
-						<thead>
-							<tr>
-								<th class="column-ai-title"><?php esc_html_e( 'Page', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-url"><?php esc_html_e( 'URL', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-score"><?php esc_html_e( 'Score', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-reason"><?php esc_html_e( 'Reason', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
-							</tr>
-						</thead>
-						<tbody id="fpp-ai-score-tbody"></tbody>
-					</table>
-				</div>
+		<!-- Metric Cards -->
+		<div class="fpp-metric-cards" id="fpp-metric-cards">
+			<div class="fpp-metric-card">
+				<div class="fpp-metric-value" id="fpp-metric-orphans">—</div>
+				<div class="fpp-metric-label"><?php esc_html_e( 'Orphan Pages', 'fpp-interlinking' ); ?></div>
+			</div>
+			<div class="fpp-metric-card">
+				<div class="fpp-metric-value" id="fpp-metric-avg-links">—</div>
+				<div class="fpp-metric-label"><?php esc_html_e( 'Avg Links/Post', 'fpp-interlinking' ); ?></div>
+			</div>
+			<div class="fpp-metric-card">
+				<div class="fpp-metric-value" id="fpp-metric-coverage">—</div>
+				<div class="fpp-metric-label"><?php esc_html_e( 'Keyword Coverage', 'fpp-interlinking' ); ?></div>
+			</div>
+			<div class="fpp-metric-card">
+				<div class="fpp-metric-value" id="fpp-metric-active">—</div>
+				<div class="fpp-metric-label"><?php esc_html_e( 'Active Keywords', 'fpp-interlinking' ); ?></div>
 			</div>
 		</div>
 
-		<hr />
+		<!-- Smart Recommendations -->
+		<div class="fpp-recommendations" id="fpp-recommendations" style="display: none;">
+			<h3><?php esc_html_e( 'Smart Recommendations', 'fpp-interlinking' ); ?></h3>
+			<div id="fpp-recommendations-list"></div>
+		</div>
 
-		<!-- Content Gap Analysis -->
-		<div class="fpp-section fpp-ai-section fpp-ai-gaps-section">
-			<h2 class="fpp-section-toggle" id="fpp-toggle-ai-gaps" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-gaps-content">
-				<span class="dashicons dashicons-search" aria-hidden="true"></span>
-				<?php esc_html_e( 'Content Gap Analysis', 'fpp-interlinking' ); ?>
-				<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
-			</h2>
-			<div class="fpp-section-content" id="fpp-ai-gaps-content" role="region" aria-labelledby="fpp-toggle-ai-gaps" style="display:none;">
-				<p class="description"><?php esc_html_e( 'Analyse your published content to discover posts that should link to each other but currently don\'t.', 'fpp-interlinking' ); ?></p>
-				<div class="fpp-ai-controls">
-					<button type="button" id="fpp-ai-gaps-btn" class="button button-primary">
-						<span class="dashicons dashicons-search"></span>
-						<?php esc_html_e( 'Analyse Content Gaps', 'fpp-interlinking' ); ?>
-					</button>
-					<span id="fpp-ai-gaps-status" class="fpp-ai-status"></span>
+		<!-- Sub-Tab Navigation -->
+		<div class="fpp-subtab-nav" id="fpp-subtab-nav">
+			<button type="button" class="fpp-subtab active" data-subtab="extract">
+				<span class="dashicons dashicons-lightbulb" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Extract', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="score">
+				<span class="dashicons dashicons-chart-bar" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Score', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="gaps">
+				<span class="dashicons dashicons-search" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Gaps', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="generate">
+				<span class="dashicons dashicons-update" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Generate', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="orphans">
+				<span class="dashicons dashicons-warning" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Orphans', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="distribution">
+				<span class="dashicons dashicons-networking" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Distribution', 'fpp-interlinking' ); ?>
+			</button>
+		</div>
+
+		<!-- Sub-Tab: Extract Keywords -->
+		<div class="fpp-subtab-panel active" data-panel="extract">
+			<p class="description"><?php esc_html_e( 'Select a post or page to analyse its content and extract SEO keywords using TF-IDF analysis.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<div class="fpp-search-wrapper">
+					<input type="text" id="fpp-ai-extract-search" class="regular-text"
+						placeholder="<?php esc_attr_e( 'Search for a post to analyse...', 'fpp-interlinking' ); ?>"
+						autocomplete="off" />
+					<div id="fpp-ai-extract-search-results" class="fpp-search-dropdown" style="display:none;"></div>
 				</div>
-				<div id="fpp-ai-gaps-results" class="fpp-ai-results" style="display:none;">
-					<table class="wp-list-table widefat fixed striped">
-						<thead>
-							<tr>
-								<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-source"><?php esc_html_e( 'Source Post', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-target"><?php esc_html_e( 'Target Post', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-confidence"><?php esc_html_e( 'Confidence', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-reason"><?php esc_html_e( 'Reason', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
-							</tr>
-						</thead>
-						<tbody id="fpp-ai-gaps-tbody"></tbody>
-					</table>
-				</div>
+				<input type="hidden" id="fpp-ai-extract-post-id" value="" />
+				<span id="fpp-ai-extract-selected" class="fpp-ai-selected-post"></span>
+				<button type="button" id="fpp-ai-extract-btn" class="button button-primary" disabled>
+					<?php esc_html_e( 'Extract Keywords', 'fpp-interlinking' ); ?>
+				</button>
+			</div>
+			<div id="fpp-ai-extract-results" class="fpp-ai-results" style="display:none;">
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-relevance"><?php esc_html_e( 'Relevance', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="fpp-ai-extract-tbody"></tbody>
+				</table>
 			</div>
 		</div>
 
-		<hr />
-
-		<!-- Auto-Generate Mappings -->
-		<div class="fpp-section fpp-ai-section fpp-ai-generate-section">
-			<h2 class="fpp-section-toggle" id="fpp-toggle-ai-generate" role="button" tabindex="0" aria-expanded="false" aria-controls="fpp-ai-generate-content">
-				<span class="dashicons dashicons-update" aria-hidden="true"></span>
-				<?php esc_html_e( 'Auto-Generate Mappings', 'fpp-interlinking' ); ?>
-				<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
-			</h2>
-			<div class="fpp-section-content" id="fpp-ai-generate-content" role="region" aria-labelledby="fpp-toggle-ai-generate" style="display:none;">
-				<p class="description"><?php esc_html_e( 'Scan your content and automatically propose keyword-to-URL mappings for a complete interlinking strategy.', 'fpp-interlinking' ); ?></p>
-				<div class="fpp-ai-controls">
-					<button type="button" id="fpp-ai-generate-btn" class="button button-primary">
-						<span class="dashicons dashicons-update"></span>
-						<?php esc_html_e( 'Auto-Generate Mappings', 'fpp-interlinking' ); ?>
-					</button>
-					<button type="button" id="fpp-ai-add-all-btn" class="button" style="display:none;">
-						<?php esc_html_e( 'Add All Mappings', 'fpp-interlinking' ); ?>
-					</button>
-					<span id="fpp-ai-generate-status" class="fpp-ai-status"></span>
-				</div>
-				<div id="fpp-ai-generate-results" class="fpp-ai-results" style="display:none;">
-					<table class="wp-list-table widefat fixed striped">
-						<thead>
-							<tr>
-								<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-url"><?php esc_html_e( 'Target URL', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-target"><?php esc_html_e( 'Target Page', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-confidence"><?php esc_html_e( 'Confidence', 'fpp-interlinking' ); ?></th>
-								<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
-							</tr>
-						</thead>
-						<tbody id="fpp-ai-generate-tbody"></tbody>
-					</table>
-				</div>
+		<!-- Sub-Tab: Relevance Scoring -->
+		<div class="fpp-subtab-panel" data-panel="score">
+			<p class="description"><?php esc_html_e( 'Enter a keyword to find and score the most relevant pages to link to.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<input type="text" id="fpp-ai-score-keyword" class="regular-text"
+					placeholder="<?php esc_attr_e( 'Enter keyword to score...', 'fpp-interlinking' ); ?>" />
+				<button type="button" id="fpp-ai-score-btn" class="button button-primary">
+					<?php esc_html_e( 'Score Relevance', 'fpp-interlinking' ); ?>
+				</button>
+			</div>
+			<div id="fpp-ai-score-results" class="fpp-ai-results" style="display:none;">
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th class="column-ai-title"><?php esc_html_e( 'Page', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-url"><?php esc_html_e( 'URL', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-score"><?php esc_html_e( 'Score', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-reason"><?php esc_html_e( 'Reason', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="fpp-ai-score-tbody"></tbody>
+				</table>
 			</div>
 		</div>
+
+		<!-- Sub-Tab: Content Gap Analysis -->
+		<div class="fpp-subtab-panel" data-panel="gaps">
+			<p class="description"><?php esc_html_e( 'Discover posts that share topics but don\'t link to each other. Powered by stemmed TF-IDF matching.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-ai-gaps-btn" class="button button-primary">
+					<?php esc_html_e( 'Analyse Content Gaps', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-ai-gaps-status" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-ai-gaps-results" class="fpp-ai-results" style="display:none;">
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-source"><?php esc_html_e( 'Source Post', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-target"><?php esc_html_e( 'Target Post', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-confidence"><?php esc_html_e( 'Confidence', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-reason"><?php esc_html_e( 'Reason', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="fpp-ai-gaps-tbody"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- Sub-Tab: Auto-Generate Mappings -->
+		<div class="fpp-subtab-panel" data-panel="generate">
+			<p class="description"><?php esc_html_e( 'Scan your content and automatically propose keyword-to-URL mappings for a complete interlinking strategy.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-ai-generate-btn" class="button button-primary">
+					<?php esc_html_e( 'Auto-Generate Mappings', 'fpp-interlinking' ); ?>
+				</button>
+				<button type="button" id="fpp-ai-add-all-btn" class="button" style="display:none;">
+					<?php esc_html_e( 'Add All Mappings', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-ai-generate-status" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-ai-generate-results" class="fpp-ai-results" style="display:none;">
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th class="column-ai-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-url"><?php esc_html_e( 'Target URL', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-target"><?php esc_html_e( 'Target Page', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-confidence"><?php esc_html_e( 'Confidence', 'fpp-interlinking' ); ?></th>
+							<th class="column-ai-actions"><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="fpp-ai-generate-tbody"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- Sub-Tab: Orphan Pages -->
+		<div class="fpp-subtab-panel" data-panel="orphans">
+			<p class="description"><?php esc_html_e( 'Detect pages with zero inbound internal links — these are invisible to search engine crawlers and users navigating your site.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-detect-orphans-btn" class="button button-primary">
+					<?php esc_html_e( 'Detect Orphan Pages', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-orphans-summary" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-orphans-results" class="fpp-ai-results" style="display:none;">
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Page', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Type', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Words', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="fpp-orphans-tbody"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- Sub-Tab: Link Distribution -->
+		<div class="fpp-subtab-panel" data-panel="distribution">
+			<p class="description"><?php esc_html_e( 'Analyse how evenly internal links are distributed across your site. Identify under-linked and over-linked pages.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-analyze-distribution-btn" class="button button-primary">
+					<?php esc_html_e( 'Analyse Distribution', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-distribution-summary" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-distribution-stats" style="display:none; margin-top: 16px;">
+				<div class="fpp-metric-cards">
+					<div class="fpp-metric-card">
+						<div class="fpp-metric-value" id="fpp-dist-avg-in">—</div>
+						<div class="fpp-metric-label"><?php esc_html_e( 'Avg Inbound', 'fpp-interlinking' ); ?></div>
+					</div>
+					<div class="fpp-metric-card">
+						<div class="fpp-metric-value" id="fpp-dist-avg-out">—</div>
+						<div class="fpp-metric-label"><?php esc_html_e( 'Avg Outbound', 'fpp-interlinking' ); ?></div>
+					</div>
+					<div class="fpp-metric-card">
+						<div class="fpp-metric-value" id="fpp-dist-under">—</div>
+						<div class="fpp-metric-label"><?php esc_html_e( 'Under-linked', 'fpp-interlinking' ); ?></div>
+					</div>
+					<div class="fpp-metric-card">
+						<div class="fpp-metric-value" id="fpp-dist-over">—</div>
+						<div class="fpp-metric-label"><?php esc_html_e( 'Over-linked', 'fpp-interlinking' ); ?></div>
+					</div>
+				</div>
+			</div>
+			<div id="fpp-distribution-results" class="fpp-ai-results" style="display:none;">
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Page', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Type', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Inbound', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Outbound', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Status', 'fpp-interlinking' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="fpp-distribution-tbody"></tbody>
+				</table>
+			</div>
+		</div>
+
 		<?php
 	}
 
@@ -1273,6 +1401,9 @@ class FPP_Interlinking_Admin {
 		}
 
 		delete_transient( 'fpp_interlinking_keywords_cache' );
+
+		// v5.0.0: Clear analysis caches when settings change.
+		FPP_Interlinking_Analyzer::clear_caches();
 
 		wp_send_json_success( array( 'message' => __( 'Settings saved successfully.', 'fpp-interlinking' ) ) );
 	}
@@ -2105,6 +2236,82 @@ class FPP_Interlinking_Admin {
 		}
 
 		$result['engine'] = $engine;
+		wp_send_json_success( $result );
+	}
+
+	/* ── v5.0.0: Smart SEO Analysis Handlers ─────────────────────────── */
+
+	/**
+	 * AJAX: Run Site Health Check.
+	 *
+	 * @since 5.0.0
+	 */
+	public function ajax_analyze_health() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_Analyzer::calculate_site_health();
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Detect orphan pages.
+	 *
+	 * @since 5.0.0
+	 */
+	public function ajax_analyze_orphans() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_Analyzer::detect_orphan_pages();
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Analyse link distribution.
+	 *
+	 * @since 5.0.0
+	 */
+	public function ajax_analyze_distribution() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_Analyzer::analyze_link_distribution();
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Analyse SEO content for a single post.
+	 *
+	 * @since 5.0.0
+	 */
+	public function ajax_analyze_seo_content() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+		if ( ! $post_id ) {
+			wp_send_json_error( array( 'message' => __( 'No post ID provided.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_Analyzer::analyze_seo_content( $post_id );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
 		wp_send_json_success( $result );
 	}
 

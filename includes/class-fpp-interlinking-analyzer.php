@@ -23,40 +23,149 @@ class FPP_Interlinking_Analyzer {
 	 * @var string[]
 	 */
 	const STOP_WORDS = array(
-		'a','about','above','after','again','against','all','also','am','an',
-		'and','any','are','aren\'t','as','at','be','because','been','before',
-		'being','below','between','both','but','by','can','can\'t','cannot',
-		'could','couldn\'t','did','didn\'t','do','does','doesn\'t','doing',
-		'don\'t','down','during','each','even','few','for','from','further',
-		'get','gets','got','had','hadn\'t','has','hasn\'t','have','haven\'t',
-		'having','he','he\'d','he\'ll','he\'s','her','here','here\'s','hers',
-		'herself','him','himself','his','how','how\'s','i','i\'d','i\'ll',
-		'i\'m','i\'ve','if','in','into','is','isn\'t','it','it\'s','its',
-		'itself','just','let','let\'s','like','make','makes','made','may',
-		'me','might','more','most','much','mustn\'t','my','myself','need',
-		'new','no','nor','not','now','of','off','on','once','one','only',
-		'or','other','ought','our','ours','ourselves','out','over','own',
-		'really','right','same','say','she','she\'d','she\'ll','she\'s',
-		'should','shouldn\'t','since','so','some','such','take','than',
-		'that','that\'s','the','their','theirs','them','themselves','then',
-		'there','there\'s','these','they','they\'d','they\'ll','they\'re',
-		'they\'ve','this','those','through','to','too','two','under','until',
-		'up','upon','us','use','used','using','very','want','was','wasn\'t',
-		'way','we','we\'d','we\'ll','we\'re','we\'ve','well','were',
-		'weren\'t','what','what\'s','when','when\'s','where','where\'s',
-		'which','while','who','who\'s','whom','why','why\'s','will','with',
-		'won\'t','work','would','wouldn\'t','you','you\'d','you\'ll',
-		'you\'re','you\'ve','your','yours','yourself','yourselves',
+		// ── Core English function words ──────────────────────────────────
+		'a','about','above','across','after','again','against','all','almost',
+		'along','already','also','although','always','am','among','an','and',
+		'another','any','anyone','anything','are','aren\'t','around','as','at',
+		'away','back','be','became','because','become','becomes','been','before',
+		'began','begin','being','below','between','best','better','both','bring',
+		'brought','but','by','came','can','can\'t','cannot','certain','certainly',
+		'change','close','come','comes','coming','completely','consider','could',
+		'couldn\'t','day','days','did','didn\'t','different','do','does',
+		'doesn\'t','doing','done','don\'t','down','during','each','easily',
+		'either','else','end','enough','entire','especially','even','every',
+		'everyone','everything','example','except','far','few','finally','find',
+		'first','follow','following','for','found','four','from','further',
+		'gave','generally','get','gets','give','given','go','goes','going',
+		'gone','good','got','great','had','hadn\'t','happen','has','hasn\'t',
+		'have','haven\'t','having','he','he\'d','he\'ll','he\'s','help','her',
+		'here','here\'s','hers','herself','high','him','himself','his','how',
+		'how\'s','however','i','i\'d','i\'ll','i\'m','i\'ve','if','important',
+		'in','include','including','instead','into','is','isn\'t','it','it\'s',
+		'its','itself','just','keep','kind','know','known','large','last',
+		'later','least','left','less','let','let\'s','like','little','long',
+		'look','looking','lot','made','main','mainly','make','makes','many',
+		'may','me','mean','means','might','more','most','move','much','must',
+		'mustn\'t','my','myself','nearly','need','never','new','next','no',
+		'nor','not','nothing','now','number','of','off','often','old','on',
+		'once','one','only','open','or','other','ought','our','ours',
+		'ourselves','out','over','own','part','people','perhaps','place',
+		'please','point','probably','provide','put','quickly','quite','rather',
+		'really','recently','right','run','said','same','say','see','seem',
+		'seems','set','several','she','she\'d','she\'ll','she\'s','should',
+		'shouldn\'t','show','simply','since','small','so','some','something',
+		'sometimes','specifically','start','still','stop','such','sure','take',
+		'tell','than','that','that\'s','the','their','theirs','them',
+		'themselves','then','there','there\'s','these','they','they\'d',
+		'they\'ll','they\'re','they\'ve','thing','things','think','this',
+		'those','thought','three','through','time','to','today','together',
+		'too','toward','try','turn','two','typically','under','unless','until',
+		'up','upon','us','use','used','using','usually','very','want','was',
+		'wasn\'t','way','we','we\'d','we\'ll','we\'re','we\'ve','well','went',
+		'were','weren\'t','what','what\'s','when','when\'s','where','where\'s',
+		'whether','which','while','who','who\'s','whom','why','why\'s','will',
+		'with','within','without','won\'t','work','would','wouldn\'t','year',
+		'years','yet','you','you\'d','you\'ll','you\'re','you\'ve','your',
+		'yours','yourself','yourselves',
+		// ── Web / content boilerplate ────────────────────────────────────
+		'click','subscribe','widget','sidebar','header','footer','menu',
+		'navigation','share','reply','login','signup','register','logout',
+		'email','cookie','cookies','powered','toggle','submit','loading',
+		'scroll','enable','disable','accept','decline','dismiss','cancel',
+		'confirm','okay','button','form','field','popup','modal','banner',
+		'notification','password','username','account','settings','profile',
+		'previous','read','more','skip','admin','editor','posted','updated',
+		'written','author','published','archive','category','tag','tags',
+		'comments','related','recent','featured','trending','popular',
 	);
 
 	/**
-	 * Extract keywords from a post using PHP text analysis.
+	 * Build an Inverse Document Frequency index across all configured post types.
+	 *
+	 * Counts how many documents contain each stemmed term. Cached as a
+	 * transient for 24 hours. The special key '_total_docs' holds the total
+	 * document count used for IDF computation.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param array $post_types Optional post type slugs (defaults to configured).
+	 * @return array Associative: stemmed_term => document_count, '_total_docs' => int.
+	 */
+	public static function get_idf_index( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$cache_key = 'fpp_idf_' . md5( implode( ',', $post_types ) );
+		$cached    = get_transient( $cache_key );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		$page     = 1;
+		$per_page = 50;
+		$df       = array(); // stem => number of documents containing it.
+		$total    = 0;
+
+		do {
+			$query = new WP_Query( array(
+				'post_type'      => $post_types,
+				'post_status'    => 'publish',
+				'posts_per_page' => $per_page,
+				'paged'          => $page,
+				'fields'         => 'ids',
+				'no_found_rows'  => false,
+			) );
+
+			if ( 1 === $page ) {
+				$total = $query->found_posts;
+			}
+
+			if ( ! $query->have_posts() ) {
+				break;
+			}
+
+			foreach ( $query->posts as $pid ) {
+				$post = get_post( $pid );
+				if ( ! $post ) {
+					continue;
+				}
+
+				$text   = self::clean_content( $post->post_content ) . ' ' . strtolower( $post->post_title );
+				$tokens = self::filter_stop_words( self::tokenize( $text ) );
+
+				// Get unique stems in this document.
+				$doc_stems = array();
+				foreach ( $tokens as $token ) {
+					$doc_stems[ self::stem( $token ) ] = true;
+				}
+
+				foreach ( $doc_stems as $stem => $_ ) {
+					if ( ! isset( $df[ $stem ] ) ) {
+						$df[ $stem ] = 0;
+					}
+					$df[ $stem ]++;
+				}
+			}
+
+			$page++;
+		} while ( $page <= $query->max_num_pages );
+
+		$df['_total_docs'] = $total;
+
+		set_transient( $cache_key, $df, DAY_IN_SECONDS );
+
+		return $df;
+	}
+
+	/**
+	 * Extract keywords from a post using TF-IDF text analysis.
 	 *
 	 * Algorithm:
 	 *  1. Strip HTML, decode entities, normalise whitespace.
-	 *  2. Tokenise into words and filter stop words.
+	 *  2. Tokenise into words, stem, and filter stop words.
 	 *  3. Generate n-grams (1-gram, 2-gram, 3-gram).
-	 *  4. Score using TF with title-boost multiplier.
+	 *  4. Score using TF-IDF with title-boost multiplier.
 	 *  5. Deduplicate (suppress substrings of higher-ranked phrases).
 	 *  6. Return top N results sorted by score descending.
 	 *
@@ -84,8 +193,17 @@ class FPP_Interlinking_Analyzer {
 		$title_tokens   = self::tokenize( $title );
 		$title_lower    = strtolower( $title );
 
-		// Build title word set for boost scoring.
-		$title_word_set = array_flip( self::filter_stop_words( $title_tokens ) );
+		// Build title word set (stemmed) for boost scoring.
+		$title_filtered  = self::filter_stop_words( $title_tokens );
+		$title_word_set  = array_flip( $title_filtered );
+		$title_stem_set  = array();
+		foreach ( $title_filtered as $tw ) {
+			$title_stem_set[ self::stem( $tw ) ] = true;
+		}
+
+		// Load IDF index for TF-IDF scoring.
+		$idf_index  = self::get_idf_index();
+		$total_docs = isset( $idf_index['_total_docs'] ) ? max( $idf_index['_total_docs'], 1 ) : 1;
 
 		// Generate n-grams from content (filtered).
 		$filtered_tokens = self::filter_stop_words( $content_tokens );
@@ -107,7 +225,7 @@ class FPP_Interlinking_Analyzer {
 		// Total word count for frequency scoring.
 		$total_words = max( count( $content_tokens ), 1 );
 
-		// Score each n-gram.
+		// Score each n-gram using TF-IDF.
 		$scored = array();
 		foreach ( $ngrams as $phrase => $count ) {
 			// Skip very short or very long phrases.
@@ -122,8 +240,21 @@ class FPP_Interlinking_Analyzer {
 				continue;
 			}
 
-			// Base score: term frequency relative to document size.
+			// TF: term frequency relative to document size.
 			$tf = ( $count / $total_words ) * 100;
+
+			// IDF: inverse document frequency (use the average IDF of the phrase's stemmed words).
+			$phrase_words = explode( ' ', $phrase );
+			$idf_sum      = 0;
+			foreach ( $phrase_words as $pw ) {
+				$pw_stem = self::stem( $pw );
+				$doc_freq = isset( $idf_index[ $pw_stem ] ) ? $idf_index[ $pw_stem ] : 0;
+				$idf_sum += log( $total_docs / ( 1 + $doc_freq ) );
+			}
+			$avg_idf = $idf_sum / max( count( $phrase_words ), 1 );
+
+			// Ensure IDF has a minimum floor so common-but-topical terms still score.
+			$idf_factor = max( $avg_idf, 0.1 );
 
 			// N-gram length bonus: prefer multi-word phrases.
 			$length_bonus = 1.0;
@@ -133,12 +264,12 @@ class FPP_Interlinking_Analyzer {
 				$length_bonus = 2.0;
 			}
 
-			// Title boost: words appearing in the title are more relevant.
-			$title_boost = 1.0;
-			$phrase_words = explode( ' ', $phrase );
+			// Title boost: use stemmed matching for better coverage.
+			$title_boost   = 1.0;
 			$title_overlap = 0;
 			foreach ( $phrase_words as $pw ) {
-				if ( isset( $title_word_set[ $pw ] ) ) {
+				$pw_stem = self::stem( $pw );
+				if ( isset( $title_stem_set[ $pw_stem ] ) || isset( $title_word_set[ $pw ] ) ) {
 					$title_overlap++;
 				}
 			}
@@ -151,7 +282,7 @@ class FPP_Interlinking_Analyzer {
 				$title_boost = max( $title_boost, 3.0 );
 			}
 
-			$score = $tf * $length_bonus * $title_boost;
+			$score = $tf * $idf_factor * $length_bonus * $title_boost;
 
 			$scored[ $phrase ] = array(
 				'keyword'   => $phrase,
@@ -167,10 +298,12 @@ class FPP_Interlinking_Analyzer {
 		} );
 
 		// Deduplicate: if "wordpress seo" exists, suppress "wordpress" and "seo".
-		$final   = array();
-		$used    = array();
-		$max_raw = min( count( $scored ), $max_count * 3 ); // Process more to compensate for dedup.
-		$i       = 0;
+		// Also deduplicate stemmed variants (e.g. "optimize" vs "optimizing").
+		$final       = array();
+		$used        = array(); // phrase => phrase.
+		$used_stems  = array(); // stemmed phrase => phrase.
+		$max_raw     = min( count( $scored ), $max_count * 3 );
+		$i           = 0;
 
 		foreach ( $scored as $item ) {
 			if ( $i >= $max_raw ) {
@@ -178,7 +311,13 @@ class FPP_Interlinking_Analyzer {
 			}
 			$i++;
 
-			$phrase = $item['keyword'];
+			$phrase      = $item['keyword'];
+			$phrase_stem = implode( ' ', array_map( array( __CLASS__, 'stem' ), explode( ' ', $phrase ) ) );
+
+			// Skip if stemmed form already selected.
+			if ( isset( $used_stems[ $phrase_stem ] ) && $used_stems[ $phrase_stem ] !== $phrase ) {
+				continue;
+			}
 
 			// Skip if this phrase is a substring of an already-selected longer phrase.
 			$is_substring = false;
@@ -195,13 +334,16 @@ class FPP_Interlinking_Analyzer {
 			// Remove previously selected phrases that are substrings of this one.
 			foreach ( $used as $key => $selected ) {
 				if ( strpos( $phrase, $selected ) !== false && $selected !== $phrase ) {
+					$sel_stem = implode( ' ', array_map( array( __CLASS__, 'stem' ), explode( ' ', $selected ) ) );
 					unset( $final[ $key ] );
 					unset( $used[ $key ] );
+					unset( $used_stems[ $sel_stem ] );
 				}
 			}
 
-			$used[ $phrase ] = $phrase;
-			$final[ $phrase ] = $item;
+			$used[ $phrase ]           = $phrase;
+			$used_stems[ $phrase_stem ] = $phrase;
+			$final[ $phrase ]          = $item;
 
 			if ( count( $final ) >= $max_count ) {
 				break;
@@ -247,6 +389,7 @@ class FPP_Interlinking_Analyzer {
 	public static function score_relevance( $keyword, $candidates, $post_types = array() ) {
 		$keyword_lower = strtolower( trim( $keyword ) );
 		$keyword_words = explode( ' ', $keyword_lower );
+		$keyword_stems = array_map( array( __CLASS__, 'stem' ), $keyword_words );
 		$keyword_slug  = sanitize_title( $keyword );
 
 		$results = array();
@@ -257,8 +400,9 @@ class FPP_Interlinking_Analyzer {
 			$url_lower     = strtolower( $candidate['url'] );
 			$post_slug     = '';
 
-			// Extract slug from URL.
-			$path_parts = explode( '/', trim( wp_parse_url( $url_lower, PHP_URL_PATH ), '/' ) );
+			// Extract slug from URL (handle trailing slashes).
+			$path = trim( wp_parse_url( $url_lower, PHP_URL_PATH ), '/' );
+			$path_parts = explode( '/', $path );
 			if ( ! empty( $path_parts ) ) {
 				$post_slug = end( $path_parts );
 			}
@@ -276,15 +420,10 @@ class FPP_Interlinking_Analyzer {
 				$score += 25;
 				$reasons[] = __( 'Title contains keyword', 'fpp-interlinking' );
 			}
-			// Signal 3: Title word overlap (+5 per word, max 15).
+			// Signal 3: Title word overlap — use stemmed matching (+5 per word, max 15).
 			else {
-				$title_words = explode( ' ', $title_lower );
-				$overlap     = 0;
-				foreach ( $keyword_words as $kw ) {
-					if ( in_array( $kw, $title_words, true ) ) {
-						$overlap++;
-					}
-				}
+				$title_word_stems = array_map( array( __CLASS__, 'stem' ), explode( ' ', $title_lower ) );
+				$overlap = count( array_intersect( $keyword_stems, $title_word_stems ) );
 				if ( $overlap > 0 ) {
 					$pts = min( $overlap * 5, 15 );
 					$score += $pts;
@@ -322,6 +461,33 @@ class FPP_Interlinking_Analyzer {
 				$reasons[] = __( 'URL slug matches keyword', 'fpp-interlinking' );
 			}
 
+			// Signal 7: Heading match (+15).
+			$post_obj = get_post( $candidate['id'] );
+			if ( $post_obj && preg_match_all( '/<h[1-3][^>]*>(.*?)<\/h[1-3]>/is', $post_obj->post_content, $hm ) ) {
+				foreach ( $hm[1] as $h_html ) {
+					$h_text = strtolower( wp_strip_all_tags( $h_html ) );
+					if ( strpos( $h_text, $keyword_lower ) !== false ) {
+						$score += 15;
+						$reasons[] = __( 'Keyword found in heading', 'fpp-interlinking' );
+						break;
+					}
+				}
+			}
+
+			// Signal 8: Category/tag match (+10).
+			if ( isset( $candidate['id'] ) ) {
+				$terms = wp_get_post_terms( $candidate['id'], array( 'category', 'post_tag' ), array( 'fields' => 'names' ) );
+				if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+					foreach ( $terms as $term_name ) {
+						if ( strpos( strtolower( $term_name ), $keyword_lower ) !== false ) {
+							$score += 10;
+							$reasons[] = __( 'Keyword matches category/tag', 'fpp-interlinking' );
+							break;
+						}
+					}
+				}
+			}
+
 			// Clamp to 1-100.
 			$score = max( 1, min( $score, 100 ) );
 
@@ -347,9 +513,10 @@ class FPP_Interlinking_Analyzer {
 	 *
 	 * @since 3.0.0
 	 *
-	 * @param int   $batch_size Number of posts per batch.
-	 * @param int   $offset     Pagination offset.
-	 * @param array $post_types Post type slugs to analyse.
+	 * @param int   $batch_size   Number of posts per batch.
+	 * @param int   $offset       Pagination offset.
+	 * @param array $post_types   Post type slugs to analyse.
+	 * @param int   $max_results  Maximum gap results (default 25).
 	 * @return array|WP_Error {
 	 *     'gaps'        => array of gap objects,
 	 *     'total_posts' => int,
@@ -357,7 +524,7 @@ class FPP_Interlinking_Analyzer {
 	 *     'offset'      => int,
 	 * }
 	 */
-	public static function analyse_content_gaps( $batch_size = 20, $offset = 0, $post_types = array() ) {
+	public static function analyse_content_gaps( $batch_size = 20, $offset = 0, $post_types = array(), $max_results = 25 ) {
 		if ( empty( $post_types ) ) {
 			$post_types = FPP_Interlinking_DB::get_configured_post_types();
 		}
@@ -378,10 +545,11 @@ class FPP_Interlinking_Analyzer {
 			return new WP_Error( 'no_posts', __( 'No published posts found for the selected post types.', 'fpp-interlinking' ) );
 		}
 
-		// Extract keywords for each post and build inverted index.
+		// Extract keywords for each post and build inverted index (stemmed).
 		$post_keywords = array(); // post_id => array of keywords.
 		$post_data     = array(); // post_id => {title, url}.
 		$inverted      = array(); // keyword => array of post_ids.
+		$stem_surface  = array(); // stemmed_key => best surface form.
 
 		while ( $query->have_posts() ) {
 			$query->the_post();
@@ -394,30 +562,38 @@ class FPP_Interlinking_Analyzer {
 				'url'   => $url,
 			);
 
-			// Extract top 10 keywords for this post.
-			$kw_result = self::extract_keywords( $pid, 10 );
+			// Extract top 12 keywords for this post.
+			$kw_result = self::extract_keywords( $pid, 12 );
 			if ( is_wp_error( $kw_result ) ) {
 				continue;
 			}
 
 			$keywords = array();
 			foreach ( $kw_result as $kw ) {
-				$phrase = strtolower( $kw['keyword'] );
-				$keywords[] = $phrase;
-				if ( ! isset( $inverted[ $phrase ] ) ) {
-					$inverted[ $phrase ] = array();
+				$phrase     = strtolower( $kw['keyword'] );
+				$stem_key   = implode( ' ', array_map( array( __CLASS__, 'stem' ), explode( ' ', $phrase ) ) );
+				$keywords[] = $stem_key;
+
+				// Track the best surface form (prefer higher relevance).
+				if ( ! isset( $stem_surface[ $stem_key ] ) || $kw['relevance'] > ( $stem_surface[ $stem_key ]['rel'] ?? 0 ) ) {
+					$stem_surface[ $stem_key ] = array( 'form' => $phrase, 'rel' => $kw['relevance'] );
 				}
-				$inverted[ $phrase ][] = $pid;
+
+				if ( ! isset( $inverted[ $stem_key ] ) ) {
+					$inverted[ $stem_key ] = array();
+				}
+				$inverted[ $stem_key ][] = $pid;
 			}
 			$post_keywords[ $pid ] = $keywords;
 		}
 		wp_reset_postdata();
 
-		// Get existing keyword mappings to check which gaps are already covered.
+		// Get existing keyword mappings (stemmed) to check which gaps are already covered.
 		$existing = FPP_Interlinking_DB::get_all_keywords();
 		$existing_map = array();
 		foreach ( $existing as $ek ) {
-			$existing_map[ strtolower( $ek['keyword'] ) ] = $ek['target_url'];
+			$ek_stem = implode( ' ', array_map( array( __CLASS__, 'stem' ), explode( ' ', strtolower( $ek['keyword'] ) ) ) );
+			$existing_map[ $ek_stem ] = $ek['target_url'];
 		}
 
 		// Find gaps: keywords shared by 2+ posts without existing mappings.
@@ -429,7 +605,7 @@ class FPP_Interlinking_Analyzer {
 				continue;
 			}
 
-			// Skip if this keyword is already mapped.
+			// Skip if this keyword (stemmed) is already mapped.
 			if ( isset( $existing_map[ $keyword ] ) ) {
 				continue;
 			}
@@ -465,8 +641,11 @@ class FPP_Interlinking_Analyzer {
 						$confidence = min( $confidence + 10, 98 );
 					}
 
+					// Use surface form for display.
+					$display_kw = isset( $stem_surface[ $keyword ] ) ? $stem_surface[ $keyword ]['form'] : $keyword;
+
 					$gaps[] = array(
-						'keyword'      => $keyword,
+						'keyword'      => $display_kw,
 						'source_id'    => $source,
 						'source_title' => isset( $post_data[ $source ] ) ? $post_data[ $source ]['title'] : '',
 						'target_id'    => $target,
@@ -483,11 +662,11 @@ class FPP_Interlinking_Analyzer {
 			}
 		}
 
-		// Sort by confidence descending, limit to 15 results.
+		// Sort by confidence descending, limit results.
 		usort( $gaps, function( $a, $b ) {
 			return $b['confidence'] - $a['confidence'];
 		} );
-		$gaps = array_slice( $gaps, 0, 15 );
+		$gaps = array_slice( $gaps, 0, $max_results );
 
 		return array(
 			'gaps'        => $gaps,
@@ -557,8 +736,8 @@ class FPP_Interlinking_Analyzer {
 		$used_keywords  = array();
 
 		foreach ( $all_posts as $post_item ) {
-			// Extract top 5 keywords for this post.
-			$kw_result = self::extract_keywords( $post_item['id'], 5 );
+			// Extract top 8 keywords for this post.
+			$kw_result = self::extract_keywords( $post_item['id'], 8 );
 			if ( is_wp_error( $kw_result ) ) {
 				continue;
 			}
@@ -588,8 +767,8 @@ class FPP_Interlinking_Analyzer {
 
 				$best = $scored[0];
 
-				// Only propose if score >= 40.
-				if ( $best['score'] < 40 ) {
+				// Only propose if score >= 55.
+				if ( $best['score'] < 55 ) {
 					continue;
 				}
 
@@ -609,14 +788,662 @@ class FPP_Interlinking_Analyzer {
 			return $b['confidence'] - $a['confidence'];
 		} );
 
-		// Limit to 20 proposals.
-		$mappings = array_slice( $mappings, 0, 20 );
+		// Limit to 30 proposals.
+		$mappings = array_slice( $mappings, 0, 30 );
 
 		return array(
 			'mappings'    => $mappings,
 			'total_posts' => $total_posts,
 			'analysed'    => count( $all_posts ),
 			'offset'      => $offset,
+		);
+	}
+
+	/* ── SEO Content Analysis ────────────────────────────────────────── */
+
+	/**
+	 * Perform a deep SEO content analysis on a single post.
+	 *
+	 * Examines keyword placement across headings, first paragraph, meta
+	 * description, image alt text, and link profile. Returns an array of
+	 * actionable metrics that feed into the Site Health score.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param int $post_id Post ID to analyse.
+	 * @return array|WP_Error {
+	 *     'word_count'           => int,
+	 *     'heading_keywords'     => string[],
+	 *     'first_para_keywords'  => string[],
+	 *     'keyword_prominence'   => int (0-100),
+	 *     'internal_links'       => int,
+	 *     'external_links'       => int,
+	 *     'images_total'         => int,
+	 *     'images_with_alt'      => int,
+	 *     'images_without_alt'   => int,
+	 *     'has_meta_description' => bool,
+	 *     'meta_keywords'        => string[],
+	 * }
+	 */
+	public static function analyze_seo_content( $post_id ) {
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return new WP_Error( 'invalid_post', __( 'Post not found.', 'fpp-interlinking' ) );
+		}
+
+		$raw_content = $post->post_content;
+		$home_host   = wp_parse_url( home_url(), PHP_URL_HOST );
+
+		// ── Word count ──────────────────────────────────────────────
+		$clean = self::clean_content( $raw_content );
+		$word_count = str_word_count( $clean );
+
+		// ── Headings (H1-H3) ────────────────────────────────────────
+		$heading_keywords = array();
+		if ( preg_match_all( '/<h[1-3][^>]*>(.*?)<\/h[1-3]>/is', $raw_content, $hm ) ) {
+			foreach ( $hm[1] as $heading_html ) {
+				$heading_text = strtolower( wp_strip_all_tags( $heading_html ) );
+				$tokens       = self::filter_stop_words( self::tokenize( $heading_text ) );
+				foreach ( $tokens as $t ) {
+					$heading_keywords[] = $t;
+				}
+			}
+		}
+		$heading_keywords = array_unique( $heading_keywords );
+
+		// ── First paragraph keywords ────────────────────────────────
+		$first_para_keywords = array();
+		$words_200 = implode( ' ', array_slice( explode( ' ', $clean ), 0, 200 ) );
+		$fp_tokens = self::filter_stop_words( self::tokenize( $words_200 ) );
+		// Keep only terms that appear 2+ times in first 200 words.
+		$fp_freq = array_count_values( $fp_tokens );
+		foreach ( $fp_freq as $term => $cnt ) {
+			if ( $cnt >= 2 ) {
+				$first_para_keywords[] = $term;
+			}
+		}
+
+		// ── Keyword prominence score (0-100) ────────────────────────
+		// Higher when important keywords appear early and in headings.
+		$title_tokens = self::filter_stop_words( self::tokenize( strtolower( $post->post_title ) ) );
+		$prominence   = 0;
+		if ( ! empty( $title_tokens ) ) {
+			// How many title keywords appear in headings?
+			$in_headings = count( array_intersect( $title_tokens, $heading_keywords ) );
+			$prominence += min( ( $in_headings / count( $title_tokens ) ) * 40, 40 );
+
+			// How many title keywords appear in first paragraph?
+			$in_first = count( array_intersect( $title_tokens, array_keys( $fp_freq ) ) );
+			$prominence += min( ( $in_first / count( $title_tokens ) ) * 35, 35 );
+
+			// Title length reasonableness (5-12 words = full marks).
+			$title_word_count = count( self::tokenize( strtolower( $post->post_title ) ) );
+			if ( $title_word_count >= 5 && $title_word_count <= 12 ) {
+				$prominence += 25;
+			} elseif ( $title_word_count >= 3 ) {
+				$prominence += 15;
+			} else {
+				$prominence += 5;
+			}
+		}
+		$prominence = min( (int) $prominence, 100 );
+
+		// ── Links ───────────────────────────────────────────────────
+		$internal_links = 0;
+		$external_links = 0;
+		if ( preg_match_all( '/<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>/is', $raw_content, $lm ) ) {
+			foreach ( $lm[1] as $href ) {
+				$link_host = wp_parse_url( $href, PHP_URL_HOST );
+				if ( empty( $link_host ) || $link_host === $home_host ) {
+					$internal_links++;
+				} else {
+					$external_links++;
+				}
+			}
+		}
+
+		// ── Images ──────────────────────────────────────────────────
+		$images_total       = 0;
+		$images_with_alt    = 0;
+		$images_without_alt = 0;
+		if ( preg_match_all( '/<img\s[^>]*>/is', $raw_content, $im ) ) {
+			$images_total = count( $im[0] );
+			foreach ( $im[0] as $img_tag ) {
+				if ( preg_match( '/alt=["\']([^"\']+)["\']/i', $img_tag, $am ) && ! empty( trim( $am[1] ) ) ) {
+					$images_with_alt++;
+				} else {
+					$images_without_alt++;
+				}
+			}
+		}
+
+		// ── Meta description ────────────────────────────────────────
+		$meta_desc     = '';
+		$meta_keywords = array();
+
+		// Check popular SEO plugins.
+		$meta_keys = array(
+			'_yoast_wpseo_metadesc',
+			'rank_math_description',
+			'_aioseo_description',
+		);
+		foreach ( $meta_keys as $mk ) {
+			$val = get_post_meta( $post_id, $mk, true );
+			if ( ! empty( $val ) ) {
+				$meta_desc = $val;
+				break;
+			}
+		}
+
+		// Fallback to excerpt.
+		if ( empty( $meta_desc ) && ! empty( $post->post_excerpt ) ) {
+			$meta_desc = $post->post_excerpt;
+		}
+
+		$has_meta = ! empty( $meta_desc );
+		if ( $has_meta ) {
+			$meta_tokens   = self::filter_stop_words( self::tokenize( strtolower( $meta_desc ) ) );
+			$meta_keywords = array_values( array_unique( $meta_tokens ) );
+		}
+
+		return array(
+			'word_count'           => $word_count,
+			'heading_keywords'     => array_values( $heading_keywords ),
+			'first_para_keywords'  => $first_para_keywords,
+			'keyword_prominence'   => $prominence,
+			'internal_links'       => $internal_links,
+			'external_links'       => $external_links,
+			'images_total'         => $images_total,
+			'images_with_alt'      => $images_with_alt,
+			'images_without_alt'   => $images_without_alt,
+			'has_meta_description' => $has_meta,
+			'meta_keywords'        => $meta_keywords,
+		);
+	}
+
+	/* ── Site Health Score ────────────────────────────────────────────── */
+
+	/**
+	 * Calculate a composite Site Health Score (0-100) with letter grade.
+	 *
+	 * Weighted signals:
+	 *  - Orphan page ratio (25%)
+	 *  - Avg links per post (20%)
+	 *  - Keyword coverage (20%)
+	 *  - Link distribution evenness (15%)
+	 *  - Active keyword ratio (10%)
+	 *  - Content with headings (10%)
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'score'      => int (0-100),
+	 *     'grade'      => string (A-F),
+	 *     'breakdown'  => array of { signal, score, weight, status, recommendation },
+	 * }
+	 */
+	public static function calculate_site_health( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$breakdown = array();
+
+		// ── 1. Orphan page ratio (25%) ──────────────────────────────
+		$orphan_data      = self::detect_orphan_pages( $post_types );
+		$orphan_pct       = $orphan_data['orphan_percentage'];
+		$orphan_score     = max( 0, 100 - ( $orphan_pct * 2 ) ); // 0% orphans = 100, 50% = 0.
+		$orphan_status    = $orphan_pct <= 10 ? 'good' : ( $orphan_pct <= 30 ? 'warning' : 'critical' );
+		$breakdown[]      = array(
+			'signal'         => __( 'Orphan Pages', 'fpp-interlinking' ),
+			'score'          => (int) $orphan_score,
+			'weight'         => 25,
+			'status'         => $orphan_status,
+			'recommendation' => $orphan_pct > 10
+				? sprintf( __( '%d pages have no inbound links. Create keyword mappings to connect them.', 'fpp-interlinking' ), $orphan_data['orphan_count'] )
+				: __( 'Great! Most pages are well connected.', 'fpp-interlinking' ),
+		);
+
+		// ── 2. Avg links per post (20%) ─────────────────────────────
+		$dist_data  = self::analyze_link_distribution( $post_types );
+		$avg_links  = ( $dist_data['avg_inbound'] + $dist_data['avg_outbound'] ) / 2;
+		// Optimal range: 3-5 links per post.
+		if ( $avg_links >= 3 && $avg_links <= 5 ) {
+			$links_score = 100;
+		} elseif ( $avg_links >= 2 && $avg_links <= 8 ) {
+			$links_score = 75;
+		} elseif ( $avg_links >= 1 ) {
+			$links_score = 50;
+		} else {
+			$links_score = max( 0, $avg_links * 50 );
+		}
+		$links_status = $links_score >= 75 ? 'good' : ( $links_score >= 50 ? 'warning' : 'critical' );
+		$breakdown[]  = array(
+			'signal'         => __( 'Links Per Post', 'fpp-interlinking' ),
+			'score'          => (int) $links_score,
+			'weight'         => 20,
+			'status'         => $links_status,
+			'recommendation' => $avg_links < 2
+				? __( 'Most posts have very few internal links. Add more keyword mappings.', 'fpp-interlinking' )
+				: ( $avg_links > 8
+					? __( 'Some posts have too many links. Consider reducing to 3-5 per post.', 'fpp-interlinking' )
+					: __( 'Good link density across your content.', 'fpp-interlinking' ) ),
+		);
+
+		// ── 3. Keyword coverage (20%) ───────────────────────────────
+		$existing_keywords = FPP_Interlinking_DB::get_all_keywords();
+		$keyword_count     = count( $existing_keywords );
+		$total_pages       = $dist_data['total_pages'];
+		$coverage_ratio    = $total_pages > 0 ? min( $keyword_count / $total_pages, 2.0 ) : 0;
+		// Target: at least 1 keyword per post.
+		$coverage_score    = min( 100, (int) ( $coverage_ratio * 50 ) );
+		$coverage_status   = $coverage_score >= 70 ? 'good' : ( $coverage_score >= 40 ? 'warning' : 'critical' );
+		$breakdown[]       = array(
+			'signal'         => __( 'Keyword Coverage', 'fpp-interlinking' ),
+			'score'          => $coverage_score,
+			'weight'         => 20,
+			'status'         => $coverage_status,
+			'recommendation' => $keyword_count < $total_pages
+				? sprintf( __( 'You have %d keywords for %d pages. Use Extract Keywords to discover more.', 'fpp-interlinking' ), $keyword_count, $total_pages )
+				: __( 'Solid keyword coverage across your content.', 'fpp-interlinking' ),
+		);
+
+		// ── 4. Link distribution evenness (15%) ─────────────────────
+		$under_pct     = $total_pages > 0 ? ( $dist_data['under_linked'] / $total_pages ) * 100 : 0;
+		$over_pct      = $total_pages > 0 ? ( $dist_data['over_linked'] / $total_pages ) * 100 : 0;
+		$imbalance     = $under_pct + $over_pct;
+		$even_score    = max( 0, 100 - ( $imbalance * 2 ) );
+		$even_status   = $even_score >= 70 ? 'good' : ( $even_score >= 40 ? 'warning' : 'critical' );
+		$breakdown[]   = array(
+			'signal'         => __( 'Link Evenness', 'fpp-interlinking' ),
+			'score'          => (int) $even_score,
+			'weight'         => 15,
+			'status'         => $even_status,
+			'recommendation' => $imbalance > 30
+				? sprintf( __( '%d under-linked and %d over-linked pages. Redistribute links for better SEO.', 'fpp-interlinking' ), $dist_data['under_linked'], $dist_data['over_linked'] )
+				: __( 'Links are well distributed across your site.', 'fpp-interlinking' ),
+		);
+
+		// ── 5. Active keyword ratio (10%) ───────────────────────────
+		$active_count = 0;
+		foreach ( $existing_keywords as $ek ) {
+			if ( ! empty( $ek['is_active'] ) ) {
+				$active_count++;
+			}
+		}
+		$active_ratio = $keyword_count > 0 ? ( $active_count / $keyword_count ) * 100 : 0;
+		$active_score = (int) $active_ratio;
+		$active_status = $active_score >= 70 ? 'good' : ( $active_score >= 40 ? 'warning' : 'critical' );
+		$breakdown[]   = array(
+			'signal'         => __( 'Active Keywords', 'fpp-interlinking' ),
+			'score'          => $active_score,
+			'weight'         => 10,
+			'status'         => $active_status,
+			'recommendation' => $active_ratio < 70
+				? sprintf( __( 'Only %d%% of keywords are active. Review and enable more.', 'fpp-interlinking' ), (int) $active_ratio )
+				: __( 'Most keywords are active and working.', 'fpp-interlinking' ),
+		);
+
+		// ── 6. Content with headings (10%) ──────────────────────────
+		$with_headings    = 0;
+		$sample_size      = min( $total_pages, 50 );
+		if ( $sample_size > 0 ) {
+			$sample_query = new WP_Query( array(
+				'post_type'      => $post_types,
+				'post_status'    => 'publish',
+				'posts_per_page' => $sample_size,
+				'orderby'        => 'rand',
+				'fields'         => 'ids',
+			) );
+			foreach ( $sample_query->posts as $spid ) {
+				$sp = get_post( $spid );
+				if ( $sp && preg_match( '/<h[1-6][^>]*>/i', $sp->post_content ) ) {
+					$with_headings++;
+				}
+			}
+		}
+		$heading_pct    = $sample_size > 0 ? ( $with_headings / $sample_size ) * 100 : 0;
+		$heading_score  = (int) $heading_pct;
+		$heading_status = $heading_score >= 70 ? 'good' : ( $heading_score >= 40 ? 'warning' : 'critical' );
+		$breakdown[]    = array(
+			'signal'         => __( 'Content Structure', 'fpp-interlinking' ),
+			'score'          => $heading_score,
+			'weight'         => 10,
+			'status'         => $heading_status,
+			'recommendation' => $heading_pct < 70
+				? sprintf( __( 'Only %d%% of sampled pages use headings. Add H2/H3 tags for better SEO.', 'fpp-interlinking' ), (int) $heading_pct )
+				: __( 'Most content uses proper heading structure.', 'fpp-interlinking' ),
+		);
+
+		// ── Weighted composite ──────────────────────────────────────
+		$total_score = 0;
+		foreach ( $breakdown as $item ) {
+			$total_score += ( $item['score'] * $item['weight'] ) / 100;
+		}
+		$total_score = (int) round( $total_score );
+
+		// Letter grade.
+		if ( $total_score >= 90 ) {
+			$grade = 'A';
+		} elseif ( $total_score >= 75 ) {
+			$grade = 'B';
+		} elseif ( $total_score >= 60 ) {
+			$grade = 'C';
+		} elseif ( $total_score >= 40 ) {
+			$grade = 'D';
+		} else {
+			$grade = 'F';
+		}
+
+		return array(
+			'score'     => $total_score,
+			'grade'     => $grade,
+			'breakdown' => $breakdown,
+		);
+	}
+
+	/**
+	 * Clear all analysis transient caches.
+	 *
+	 * Called when settings change (e.g. post types updated).
+	 *
+	 * @since 5.0.0
+	 */
+	public static function clear_caches() {
+		global $wpdb;
+
+		// Delete all fpp_ analysis transients.
+		$wpdb->query(
+			"DELETE FROM {$wpdb->options}
+			 WHERE option_name LIKE '_transient_fpp_idf_%'
+			    OR option_name LIKE '_transient_timeout_fpp_idf_%'
+			    OR option_name LIKE '_transient_fpp_link_graph_%'
+			    OR option_name LIKE '_transient_timeout_fpp_link_graph_%'"
+		);
+	}
+
+	/* ── Link Graph, Orphan Pages & Distribution ────────────────────── */
+
+	/**
+	 * Build an internal link graph across all published content.
+	 *
+	 * Parses every post's raw HTML for `<a href>` tags, normalises URLs
+	 * against `home_url()`, and builds inbound / outbound count maps.
+	 * Cached as a transient for 6 hours.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'inbound'   => array post_id => count,
+	 *     'outbound'  => array post_id => count,
+	 *     'post_info' => array post_id => { title, url, type, word_count },
+	 *     'total'     => int,
+	 * }
+	 */
+	private static function build_link_graph( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$cache_key = 'fpp_link_graph_' . md5( implode( ',', $post_types ) );
+		$cached    = get_transient( $cache_key );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		$home_url  = home_url();
+		$home_host = wp_parse_url( $home_url, PHP_URL_HOST );
+
+		// Build URL → post_id map + post info.
+		$url_to_id  = array();
+		$post_info  = array();
+		$inbound    = array();
+		$outbound   = array();
+
+		$page     = 1;
+		$per_page = 100;
+		$all_ids  = array();
+
+		do {
+			$query = new WP_Query( array(
+				'post_type'      => $post_types,
+				'post_status'    => 'publish',
+				'posts_per_page' => $per_page,
+				'paged'          => $page,
+				'no_found_rows'  => false,
+			) );
+
+			if ( ! $query->have_posts() ) {
+				break;
+			}
+
+			while ( $query->have_posts() ) {
+				$query->the_post();
+				$pid = get_the_ID();
+				$url = get_permalink();
+
+				$all_ids[] = $pid;
+
+				// Normalise URL for lookup.
+				$norm = untrailingslashit( strtolower( $url ) );
+				$url_to_id[ $norm ] = $pid;
+
+				$post_info[ $pid ] = array(
+					'title'      => get_the_title(),
+					'url'        => $url,
+					'type'       => get_post_type(),
+					'word_count' => str_word_count( self::clean_content( get_the_content() ) ),
+				);
+
+				$inbound[ $pid ]  = 0;
+				$outbound[ $pid ] = 0;
+			}
+
+			$page++;
+		} while ( $page <= $query->max_num_pages );
+		wp_reset_postdata();
+
+		$total = count( $all_ids );
+
+		// Second pass: parse links.
+		foreach ( $all_ids as $pid ) {
+			$post = get_post( $pid );
+			if ( ! $post ) {
+				continue;
+			}
+
+			$raw = $post->post_content;
+			if ( ! preg_match_all( '/<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>/is', $raw, $lm ) ) {
+				continue;
+			}
+
+			$linked_ids = array(); // Deduplicate per-post.
+			foreach ( $lm[1] as $href ) {
+				$link_host = wp_parse_url( $href, PHP_URL_HOST );
+
+				// Only count internal links.
+				if ( ! empty( $link_host ) && $link_host !== $home_host ) {
+					continue;
+				}
+
+				// Resolve relative URLs.
+				if ( empty( $link_host ) ) {
+					$href = $home_url . '/' . ltrim( $href, '/' );
+				}
+
+				$norm_href = untrailingslashit( strtolower( $href ) );
+
+				// Remove query strings and fragments for matching.
+				$norm_href = preg_replace( '/[?#].*$/', '', $norm_href );
+
+				if ( isset( $url_to_id[ $norm_href ] ) ) {
+					$target_id = $url_to_id[ $norm_href ];
+
+					// Don't count self-links.
+					if ( $target_id === $pid ) {
+						continue;
+					}
+
+					if ( ! isset( $linked_ids[ $target_id ] ) ) {
+						$linked_ids[ $target_id ] = true;
+						$outbound[ $pid ]++;
+						$inbound[ $target_id ]++;
+					}
+				}
+			}
+		}
+
+		$result = array(
+			'inbound'   => $inbound,
+			'outbound'  => $outbound,
+			'post_info' => $post_info,
+			'total'     => $total,
+		);
+
+		set_transient( $cache_key, $result, 6 * HOUR_IN_SECONDS );
+
+		return $result;
+	}
+
+	/**
+	 * Detect orphan pages — pages with zero inbound internal links.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'orphan_pages'      => array of { id, title, url, type, word_count },
+	 *     'total_pages'       => int,
+	 *     'orphan_count'      => int,
+	 *     'orphan_percentage' => float,
+	 * }
+	 */
+	public static function detect_orphan_pages( $post_types = array() ) {
+		$graph   = self::build_link_graph( $post_types );
+		$orphans = array();
+
+		foreach ( $graph['inbound'] as $pid => $count ) {
+			if ( 0 === $count && isset( $graph['post_info'][ $pid ] ) ) {
+				$info      = $graph['post_info'][ $pid ];
+				$orphans[] = array(
+					'id'         => $pid,
+					'title'      => $info['title'],
+					'url'        => $info['url'],
+					'type'       => $info['type'],
+					'word_count' => $info['word_count'],
+				);
+			}
+		}
+
+		// Sort by word count descending (longer orphan pages are higher priority).
+		usort( $orphans, function( $a, $b ) {
+			return $b['word_count'] - $a['word_count'];
+		} );
+
+		$total = $graph['total'];
+		$count = count( $orphans );
+
+		return array(
+			'orphan_pages'      => $orphans,
+			'total_pages'       => $total,
+			'orphan_count'      => $count,
+			'orphan_percentage' => $total > 0 ? round( ( $count / $total ) * 100, 1 ) : 0,
+		);
+	}
+
+	/**
+	 * Analyse the distribution of internal links across the site.
+	 *
+	 * Returns per-page inbound/outbound counts plus site-wide averages
+	 * and flags pages that are over-linked or under-linked.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'pages'          => array of { id, title, url, type, inbound, outbound, status },
+	 *     'avg_inbound'    => float,
+	 *     'avg_outbound'   => float,
+	 *     'total_pages'    => int,
+	 *     'over_linked'    => int,
+	 *     'under_linked'   => int,
+	 *     'well_linked'    => int,
+	 * }
+	 */
+	public static function analyze_link_distribution( $post_types = array() ) {
+		$graph = self::build_link_graph( $post_types );
+		$total = $graph['total'];
+
+		if ( 0 === $total ) {
+			return array(
+				'pages'        => array(),
+				'avg_inbound'  => 0,
+				'avg_outbound' => 0,
+				'total_pages'  => 0,
+				'over_linked'  => 0,
+				'under_linked' => 0,
+				'well_linked'  => 0,
+			);
+		}
+
+		$sum_in  = array_sum( $graph['inbound'] );
+		$sum_out = array_sum( $graph['outbound'] );
+		$avg_in  = $sum_in / $total;
+		$avg_out = $sum_out / $total;
+
+		$pages        = array();
+		$over_linked  = 0;
+		$under_linked = 0;
+		$well_linked  = 0;
+
+		foreach ( $graph['post_info'] as $pid => $info ) {
+			$in  = isset( $graph['inbound'][ $pid ] ) ? $graph['inbound'][ $pid ] : 0;
+			$out = isset( $graph['outbound'][ $pid ] ) ? $graph['outbound'][ $pid ] : 0;
+
+			// Determine status based on deviation from average.
+			if ( $avg_in > 0 && $in > $avg_in * 2 ) {
+				$status = 'over-linked';
+				$over_linked++;
+			} elseif ( $in < max( $avg_in * 0.25, 1 ) ) {
+				$status = 'under-linked';
+				$under_linked++;
+			} else {
+				$status = 'normal';
+				$well_linked++;
+			}
+
+			$pages[] = array(
+				'id'       => $pid,
+				'title'    => $info['title'],
+				'url'      => $info['url'],
+				'type'     => $info['type'],
+				'inbound'  => $in,
+				'outbound' => $out,
+				'status'   => $status,
+			);
+		}
+
+		// Sort: under-linked first, then by inbound ascending.
+		usort( $pages, function( $a, $b ) {
+			$order = array( 'under-linked' => 0, 'normal' => 1, 'over-linked' => 2 );
+			$sa    = isset( $order[ $a['status'] ] ) ? $order[ $a['status'] ] : 1;
+			$sb    = isset( $order[ $b['status'] ] ) ? $order[ $b['status'] ] : 1;
+			if ( $sa !== $sb ) {
+				return $sa - $sb;
+			}
+			return $a['inbound'] - $b['inbound'];
+		} );
+
+		return array(
+			'pages'        => $pages,
+			'avg_inbound'  => round( $avg_in, 1 ),
+			'avg_outbound' => round( $avg_out, 1 ),
+			'total_pages'  => $total,
+			'over_linked'  => $over_linked,
+			'under_linked' => $under_linked,
+			'well_linked'  => $well_linked,
 		);
 	}
 
@@ -749,5 +1576,220 @@ class FPP_Interlinking_Analyzer {
 			}
 		}
 		return true;
+	}
+
+	/* ── Porter Stemmer ──────────────────────────────────────────────── */
+
+	/**
+	 * Simplified Porter stemmer with memoization cache.
+	 *
+	 * Reduces English words to their root form so that "running", "runs",
+	 * and "run" all map to the same stem. This dramatically improves
+	 * keyword matching and TF-IDF accuracy.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param string $word Lowercase word.
+	 * @return string Stemmed word.
+	 */
+	private static function stem( $word ) {
+		static $cache = array();
+
+		if ( isset( $cache[ $word ] ) ) {
+			return $cache[ $word ];
+		}
+
+		$stem = $word;
+
+		// Don't stem short words.
+		if ( strlen( $stem ) <= 3 ) {
+			$cache[ $word ] = $stem;
+			return $stem;
+		}
+
+		// Step 1a: plurals.
+		if ( substr( $stem, -4 ) === 'sses' ) {
+			$stem = substr( $stem, 0, -2 );
+		} elseif ( substr( $stem, -3 ) === 'ies' ) {
+			$stem = substr( $stem, 0, -2 );
+		} elseif ( substr( $stem, -2 ) !== 'ss' && substr( $stem, -1 ) === 's' ) {
+			$stem = substr( $stem, 0, -1 );
+		}
+
+		// Step 1b: -eed, -ed, -ing.
+		if ( substr( $stem, -3 ) === 'eed' ) {
+			if ( self::stem_measure( substr( $stem, 0, -3 ) ) > 0 ) {
+				$stem = substr( $stem, 0, -1 );
+			}
+		} elseif ( preg_match( '/^(.+?)(ed|ing)$/i', $stem, $m ) && preg_match( '/[aeiou]/', $m[1] ) ) {
+			$stem = $m[1];
+			if ( preg_match( '/(at|bl|iz)$/', $stem ) ) {
+				$stem .= 'e';
+			} elseif ( preg_match( '/([^aeiouslz])\1$/', $stem ) ) {
+				$stem = substr( $stem, 0, -1 );
+			} elseif ( self::stem_measure( $stem ) === 1 && self::stem_cvc( $stem ) ) {
+				$stem .= 'e';
+			}
+		}
+
+		// Step 1c: y → i when stem contains a vowel.
+		if ( substr( $stem, -1 ) === 'y' && preg_match( '/[aeiou]/', substr( $stem, 0, -1 ) ) ) {
+			$stem = substr( $stem, 0, -1 ) . 'i';
+		}
+
+		// Step 2: double-suffix removal (m > 0).
+		$step2 = array(
+			'ational' => 'ate',  'tional'  => 'tion', 'enci'    => 'ence',
+			'anci'    => 'ance', 'izer'    => 'ize',  'abli'    => 'able',
+			'alli'    => 'al',   'entli'   => 'ent',  'eli'     => 'e',
+			'ousli'   => 'ous',  'ization' => 'ize',  'ation'   => 'ate',
+			'ator'    => 'ate',  'alism'   => 'al',   'iveness' => 'ive',
+			'fulness' => 'ful',  'ousness' => 'ous',  'aliti'   => 'al',
+			'iviti'   => 'ive',  'biliti'  => 'ble',
+		);
+		foreach ( $step2 as $suffix => $replacement ) {
+			if ( substr( $stem, -strlen( $suffix ) ) === $suffix ) {
+				$base = substr( $stem, 0, -strlen( $suffix ) );
+				if ( self::stem_measure( $base ) > 0 ) {
+					$stem = $base . $replacement;
+				}
+				break;
+			}
+		}
+
+		// Step 3: suffix removal (m > 0).
+		$step3 = array(
+			'icate' => 'ic', 'ative' => '', 'alize' => 'al',
+			'iciti' => 'ic', 'ical'  => 'ic', 'ful' => '', 'ness' => '',
+		);
+		foreach ( $step3 as $suffix => $replacement ) {
+			if ( substr( $stem, -strlen( $suffix ) ) === $suffix ) {
+				$base = substr( $stem, 0, -strlen( $suffix ) );
+				if ( self::stem_measure( $base ) > 0 ) {
+					$stem = $base . $replacement;
+				}
+				break;
+			}
+		}
+
+		// Step 4: final suffix removal (m > 1).
+		$step4 = array(
+			'al', 'ance', 'ence', 'er', 'ic', 'able', 'ible', 'ant',
+			'ement', 'ment', 'ent', 'ion', 'ou', 'ism', 'ate', 'iti',
+			'ous', 'ive', 'ize',
+		);
+		foreach ( $step4 as $suffix ) {
+			if ( substr( $stem, -strlen( $suffix ) ) === $suffix ) {
+				$base = substr( $stem, 0, -strlen( $suffix ) );
+				if ( 'ion' === $suffix ) {
+					if ( self::stem_measure( $base ) > 1 && preg_match( '/(s|t)$/', $base ) ) {
+						$stem = $base;
+					}
+				} elseif ( self::stem_measure( $base ) > 1 ) {
+					$stem = $base;
+				}
+				break;
+			}
+		}
+
+		// Step 5a: remove trailing 'e'.
+		if ( substr( $stem, -1 ) === 'e' ) {
+			$base = substr( $stem, 0, -1 );
+			if ( self::stem_measure( $base ) > 1 || ( self::stem_measure( $base ) === 1 && ! self::stem_cvc( $base ) ) ) {
+				$stem = $base;
+			}
+		}
+
+		// Step 5b: double-l.
+		if ( substr( $stem, -2 ) === 'll' && self::stem_measure( $stem ) > 1 ) {
+			$stem = substr( $stem, 0, -1 );
+		}
+
+		$cache[ $word ] = $stem;
+		return $stem;
+	}
+
+	/**
+	 * Count the "measure" (m) of a stem — number of VC sequences.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param string $str Stem string.
+	 * @return int Measure value.
+	 */
+	private static function stem_measure( $str ) {
+		$str = preg_replace( '/^[^aeiou]+/', '', $str );
+		$str = preg_replace( '/[^aeiou]+$/', '', $str );
+		if ( empty( $str ) ) {
+			return 0;
+		}
+		preg_match_all( '/[aeiou]+[^aeiou]+/', $str, $m );
+		return count( $m[0] );
+	}
+
+	/**
+	 * Check if stem ends with consonant-vowel-consonant (not w, x, y).
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param string $str Stem string.
+	 * @return bool
+	 */
+	private static function stem_cvc( $str ) {
+		if ( strlen( $str ) < 3 ) {
+			return false;
+		}
+		$c3 = $str[ strlen( $str ) - 1 ];
+		$c2 = $str[ strlen( $str ) - 2 ];
+		$c1 = $str[ strlen( $str ) - 3 ];
+		if ( in_array( $c3, array( 'w', 'x', 'y' ), true ) ) {
+			return false;
+		}
+		$vowels = array( 'a', 'e', 'i', 'o', 'u' );
+		return ! in_array( $c3, $vowels, true ) && in_array( $c2, $vowels, true ) && ! in_array( $c1, $vowels, true );
+	}
+
+	/**
+	 * Stem an array of tokens and track the most common surface form per stem.
+	 *
+	 * Returns both the stemmed token list and a mapping from each stem back
+	 * to the most-frequently-seen original word form.
+	 *
+	 * @since 5.0.0
+	 *
+	 * @param string[] $tokens Lowercase word tokens.
+	 * @return array {
+	 *     'stems'       => string[] Stemmed tokens (same order/length as input),
+	 *     'surface_map' => array     stem => most-common original form,
+	 * }
+	 */
+	private static function stem_tokens( $tokens ) {
+		$stemmed         = array();
+		$stem_to_surface = array();
+
+		foreach ( $tokens as $token ) {
+			$stem = self::stem( $token );
+
+			if ( ! isset( $stem_to_surface[ $stem ] ) ) {
+				$stem_to_surface[ $stem ] = array();
+			}
+			if ( ! isset( $stem_to_surface[ $stem ][ $token ] ) ) {
+				$stem_to_surface[ $stem ][ $token ] = 0;
+			}
+			$stem_to_surface[ $stem ][ $token ]++;
+			$stemmed[] = $stem;
+		}
+
+		// Map each stem to its most common surface form.
+		$surface_map = array();
+		foreach ( $stem_to_surface as $stem => $forms ) {
+			arsort( $forms );
+			$surface_map[ $stem ] = key( $forms );
+		}
+
+		return array(
+			'stems'       => $stemmed,
+			'surface_map' => $surface_map,
+		);
 	}
 }
