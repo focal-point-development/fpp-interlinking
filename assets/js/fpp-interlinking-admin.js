@@ -72,6 +72,19 @@
 			$(document).on('click', '#fpp-detect-orphans-btn', FPP.detectOrphans);
 			$(document).on('click', '#fpp-analyze-distribution-btn', FPP.analyzeDistribution);
 
+			// v6.0.0: Deep linking analysis buttons.
+			$(document).on('click', '#fpp-analyze-ilr-btn', FPP.analyzeILR);
+			$(document).on('click', '#fpp-analyze-crawl-depth-btn', FPP.analyzeCrawlDepth);
+			$(document).on('click', '#fpp-analyze-anchors-btn', FPP.analyzeAnchors);
+			$(document).on('click', '#fpp-analyze-clusters-btn', FPP.analyzeClusters);
+
+			// v6.0.0: JSON import/export.
+			$(document).on('click', '#fpp-export-json', FPP.exportJson);
+			$(document).on('change', '#fpp-import-json-file', FPP.importJson);
+
+			// v6.0.0: Onboarding dismiss.
+			$(document).on('click', '.fpp-onboarding-dismiss', FPP.dismissOnboarding);
+
 			// Analysis Tools (use dispatcher endpoints).
 			$(document).on('input', '#fpp-ai-extract-search', FPP.createDebounce(FPP.aiExtractSearch, 300));
 			$(document).on('click', '.fpp-ai-extract-result-item', FPP.aiExtractSelectPost);
@@ -193,6 +206,9 @@
 		},
 
 		renderDashboard: function(data) {
+			// v6.0.0: Show onboarding panel for first-time users.
+			FPP.maybeShowOnboarding();
+
 			var cov = data.coverage || {};
 			var sum = data.summary || {};
 
@@ -545,9 +561,13 @@
 			$('#fpp-no-keywords').hide();
 
 			$.each(data.keywords, function(i, kw) {
+				var relBadges = '';
+				if (parseInt(kw.rel_sponsored)) relBadges += '<span class="fpp-rel-badge badge-sponsored">Sponsored</span>';
+				if (parseInt(kw.rel_ugc)) relBadges += '<span class="fpp-rel-badge badge-ugc">UGC</span>';
+
 				var row = '<tr id="fpp-keyword-row-' + kw.id + '">'
 					+ '<td class="column-cb check-column"><input type="checkbox" class="fpp-kw-check" value="' + kw.id + '" /></td>'
-					+ '<td class="column-keyword">' + FPP.escHtml(kw.keyword) + '</td>'
+					+ '<td class="column-keyword">' + FPP.escHtml(kw.keyword) + (relBadges ? '<br>' + relBadges : '') + '</td>'
 					+ '<td class="column-url"><a href="' + FPP.escAttr(kw.target_url) + '" target="_blank" rel="noopener noreferrer">' + FPP.escHtml(kw.target_url) + '</a></td>'
 					+ '<td class="column-nofollow">' + (parseInt(kw.nofollow) ? 'Yes' : 'No') + '</td>'
 					+ '<td class="column-newtab">' + (parseInt(kw.new_tab) ? 'Yes' : 'No') + '</td>'
@@ -561,7 +581,9 @@
 					+ ' data-url="' + FPP.escAttr(kw.target_url) + '"'
 					+ ' data-nofollow="' + kw.nofollow + '"'
 					+ ' data-newtab="' + kw.new_tab + '"'
-					+ ' data-max="' + kw.max_replacements + '">Edit</button> '
+					+ ' data-max="' + kw.max_replacements + '"'
+					+ ' data-sponsored="' + (kw.rel_sponsored || 0) + '"'
+					+ ' data-ugc="' + (kw.rel_ugc || 0) + '">Edit</button> '
 					+ '<button type="button" class="button button-small fpp-scan-keyword"'
 					+ ' data-id="' + kw.id + '"'
 					+ ' data-keyword="' + FPP.escAttr(kw.keyword) + '">Scan</button> '
@@ -727,7 +749,9 @@
 				target_url:       targetUrl,
 				nofollow:         $('#fpp-per-nofollow').is(':checked') ? 1 : 0,
 				new_tab:          $('#fpp-per-new-tab').is(':checked') ? 1 : 0,
-				max_replacements: perMax
+				max_replacements: perMax,
+				rel_sponsored:    $('#fpp-per-sponsored').is(':checked') ? 1 : 0,
+				rel_ugc:          $('#fpp-per-ugc').is(':checked') ? 1 : 0
 			}, function(response) {
 				$btn.prop('disabled', false).text(fppInterlinking.i18n.add_keyword);
 				if (response.success) {
@@ -753,6 +777,8 @@
 			$('#fpp-per-nofollow').prop('checked', $btn.data('nofollow') == 1);
 			$('#fpp-per-new-tab').prop('checked', $btn.data('newtab') == 1);
 			$('#fpp-per-max-replacements').val($btn.data('max'));
+			$('#fpp-per-sponsored').prop('checked', $btn.data('sponsored') == 1);
+			$('#fpp-per-ugc').prop('checked', $btn.data('ugc') == 1);
 
 			$('#fpp-form-title').text(fppInterlinking.i18n.edit_mapping);
 			$('#fpp-add-keyword').hide();
@@ -794,7 +820,9 @@
 				target_url:       targetUrl,
 				nofollow:         $('#fpp-per-nofollow').is(':checked') ? 1 : 0,
 				new_tab:          $('#fpp-per-new-tab').is(':checked') ? 1 : 0,
-				max_replacements: perMax
+				max_replacements: perMax,
+				rel_sponsored:    $('#fpp-per-sponsored').is(':checked') ? 1 : 0,
+				rel_ugc:          $('#fpp-per-ugc').is(':checked') ? 1 : 0
 			}, function(response) {
 				$btn.prop('disabled', false).text(fppInterlinking.i18n.update_keyword);
 				if (response.success) {
@@ -871,6 +899,8 @@
 			$('#fpp-per-nofollow').prop('checked', false);
 			$('#fpp-per-new-tab').prop('checked', true);
 			$('#fpp-per-max-replacements').val(0);
+			$('#fpp-per-sponsored').prop('checked', false);
+			$('#fpp-per-ugc').prop('checked', false);
 		},
 
 		/* ── Quick-Add Post Search ────────────────────────────────────── */
@@ -1973,6 +2003,409 @@
 			}
 			$('#fpp-distribution-tbody').html(html);
 			$('#fpp-distribution-results').show();
+		},
+
+		/* ── v6.0.0: Internal Link Rank (ILR) ─────────────────────────── */
+
+		analyzeILR: function(e) {
+			if (e) e.preventDefault();
+			var $btn = $('#fpp-analyze-ilr-btn');
+			FPP.btnLoading($btn, fppInterlinking.i18n.analyzing || 'Analysing...');
+			$('#fpp-ilr-summary').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_ilr',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderILRResults(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderILRResults: function(data) {
+			var pages = data.pages || [];
+			var summary = (fppInterlinking.i18n.ilr_summary || '%1$d pages analysed — %2$d strong, %3$d medium, %4$d weak')
+				.replace('%1$d', pages.length)
+				.replace('%2$d', data.strong_count || 0)
+				.replace('%3$d', data.medium_count || 0)
+				.replace('%4$d', data.weak_count || 0);
+			$('#fpp-ilr-summary').text(summary);
+
+			if (pages.length === 0) {
+				$('#fpp-ilr-results').hide();
+				return;
+			}
+
+			var maxScore = 1;
+			for (var i = 0; i < pages.length; i++) {
+				if (pages[i].ilr > maxScore) maxScore = pages[i].ilr;
+			}
+
+			var html = '<table class="wp-list-table widefat fixed striped fpp-sortable fpp-ilr-table"><thead><tr>'
+				+ '<th>' + FPP.escHtml(fppInterlinking.i18n.page || 'Page') + '</th>'
+				+ '<th>' + FPP.escHtml(fppInterlinking.i18n.ilr_score || 'ILR Score') + '</th>'
+				+ '<th class="fpp-ilr-bar-cell">' + FPP.escHtml(fppInterlinking.i18n.strength || 'Strength') + '</th>'
+				+ '<th>' + FPP.escHtml(fppInterlinking.i18n.classification || 'Classification') + '</th>'
+				+ '</tr></thead><tbody>';
+
+			var limit = Math.min(pages.length, 50);
+			for (var j = 0; j < limit; j++) {
+				var p = pages[j];
+				var score = parseFloat(p.ilr) || 0;
+				var cls = p.classification || 'weak';
+				var barWidth = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
+				html += '<tr>';
+				html += '<td><a href="' + FPP.escAttr(p.url || '#') + '" target="_blank">' + FPP.escHtml(p.title || '') + '</a></td>';
+				html += '<td class="fpp-ilr-score">' + score.toFixed(1) + '</td>';
+				html += '<td class="fpp-ilr-bar-cell"><div class="fpp-ilr-bar"><div class="fpp-ilr-bar-track"><div class="fpp-ilr-bar-fill ilr-' + cls + '" style="width:' + barWidth + '%"></div></div></div></td>';
+				html += '<td><span class="fpp-ilr-badge ilr-' + cls + '">' + FPP.escHtml(cls) + '</span></td>';
+				html += '</tr>';
+			}
+			html += '</tbody></table>';
+
+			// Recommendations.
+			if (data.recommendations && data.recommendations.length > 0) {
+				html += '<div class="fpp-ilr-recommendations"><h4>' + FPP.escHtml(fppInterlinking.i18n.ilr_recommendations || 'Link from strong to weak pages') + '</h4>';
+				var recLimit = Math.min(data.recommendations.length, 10);
+				for (var k = 0; k < recLimit; k++) {
+					var rec = data.recommendations[k];
+					html += '<div class="fpp-ilr-rec-item">'
+						+ '<span class="fpp-ilr-badge ilr-strong">strong</span> '
+						+ FPP.escHtml(rec.from_title || '')
+						+ ' <span class="fpp-ilr-rec-arrow">&rarr;</span> '
+						+ '<span class="fpp-ilr-badge ilr-weak">weak</span> '
+						+ FPP.escHtml(rec.to_title || '')
+						+ '</div>';
+				}
+				html += '</div>';
+			}
+
+			$('#fpp-ilr-results').html(html).show();
+			FPP.makeSortable($('#fpp-ilr-results').find('table'));
+		},
+
+		/* ── v6.0.0: Crawl Depth Analysis ─────────────────────────────── */
+
+		analyzeCrawlDepth: function(e) {
+			if (e) e.preventDefault();
+			var $btn = $('#fpp-analyze-crawl-depth-btn');
+			FPP.btnLoading($btn, fppInterlinking.i18n.analyzing || 'Analysing...');
+			$('#fpp-crawl-depth-summary').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_crawl_depth',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderCrawlDepthResults(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderCrawlDepthResults: function(data) {
+			var distribution = data.distribution || {};
+			var unreachable = data.unreachable || [];
+			var totalPages = data.total_pages || 0;
+
+			$('#fpp-crawl-depth-summary').text(
+				(fppInterlinking.i18n.crawl_depth_summary || '%1$d pages analysed, %2$d unreachable')
+					.replace('%1$d', totalPages)
+					.replace('%2$d', unreachable.length)
+			);
+
+			// Build histogram.
+			var maxCount = 1;
+			var depthKeys = Object.keys(distribution).sort(function(a, b) { return parseInt(a) - parseInt(b); });
+			for (var i = 0; i < depthKeys.length; i++) {
+				if (distribution[depthKeys[i]] > maxCount) maxCount = distribution[depthKeys[i]];
+			}
+
+			var html = '<div class="fpp-depth-histogram">';
+			for (var j = 0; j < depthKeys.length; j++) {
+				var depth = depthKeys[j];
+				var count = distribution[depth];
+				var barWidth = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+				var depthClass = parseInt(depth) <= 0 ? 'depth-0' : (parseInt(depth) <= 1 ? 'depth-1' : (parseInt(depth) <= 2 ? 'depth-2' : (parseInt(depth) <= 3 ? 'depth-3' : 'depth-deep')));
+				var label = (fppInterlinking.i18n.depth_level || 'Depth %d').replace('%d', depth);
+
+				html += '<div class="fpp-depth-row">';
+				html += '<span class="fpp-depth-label">' + FPP.escHtml(label) + '</span>';
+				html += '<div class="fpp-depth-bar-track"><div class="fpp-depth-bar-fill ' + depthClass + '" style="width:' + barWidth + '%">' + count + '</div></div>';
+				html += '<span class="fpp-depth-count">' + FPP.escHtml(String(count)) + ' pages</span>';
+				html += '</div>';
+			}
+			html += '</div>';
+
+			// Unreachable pages alert.
+			if (unreachable.length > 0) {
+				html += '<div class="fpp-unreachable-alert">'
+					+ '<span class="dashicons dashicons-warning"></span>'
+					+ '<div><strong>' + FPP.escHtml((fppInterlinking.i18n.unreachable_pages || '%d unreachable pages').replace('%d', unreachable.length)) + '</strong><br>';
+				var unreachLimit = Math.min(unreachable.length, 10);
+				for (var k = 0; k < unreachLimit; k++) {
+					html += FPP.escHtml(unreachable[k].title || unreachable[k].url || '') + '<br>';
+				}
+				if (unreachable.length > 10) {
+					html += '... ' + FPP.escHtml(fppInterlinking.i18n.and_more || 'and %d more').replace('%d', unreachable.length - 10);
+				}
+				html += '</div></div>';
+			}
+
+			$('#fpp-crawl-depth-results').html(html).show();
+		},
+
+		/* ── v6.0.0: Anchor Text Analysis ─────────────────────────────── */
+
+		analyzeAnchors: function(e) {
+			if (e) e.preventDefault();
+			var $btn = $('#fpp-analyze-anchors-btn');
+			FPP.btnLoading($btn, fppInterlinking.i18n.analyzing || 'Analysing...');
+			$('#fpp-anchors-summary').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_anchors',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderAnchorResults(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderAnchorResults: function(data) {
+			var quality = data.quality_percent || 0;
+			var anchors = data.worst_offenders || [];
+
+			$('#fpp-anchors-summary').text(
+				(fppInterlinking.i18n.anchor_summary || '%1$d links analysed, %2$d%% quality score')
+					.replace('%1$d', data.total_links || 0)
+					.replace('%2$d', quality)
+			);
+
+			var qualityClass = quality >= 70 ? 'quality-good' : (quality >= 40 ? 'quality-warning' : 'quality-poor');
+			var html = '<div class="fpp-anchor-quality-score">'
+				+ '<span class="fpp-anchor-quality-value ' + qualityClass + '">' + quality + '%</span>'
+				+ '<span class="fpp-anchor-quality-label">' + FPP.escHtml(fppInterlinking.i18n.anchor_quality || 'Anchor Text Quality') + '</span>'
+				+ '</div>';
+
+			if (anchors.length > 0) {
+				html += '<table class="wp-list-table widefat fixed striped fpp-sortable"><thead><tr>'
+					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.anchor_text || 'Anchor Text') + '</th>'
+					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.source_page || 'Source Page') + '</th>'
+					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.target_page || 'Target Page') + '</th>'
+					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.quality || 'Quality') + '</th>'
+					+ '</tr></thead><tbody>';
+
+				var limit = Math.min(anchors.length, 50);
+				for (var i = 0; i < limit; i++) {
+					var a = anchors[i];
+					var badge = a.quality || 'poor';
+					html += '<tr>';
+					html += '<td>' + FPP.escHtml(a.anchor_text || '(empty)') + '</td>';
+					html += '<td>' + FPP.escHtml(a.source_title || a.source_url || '') + '</td>';
+					html += '<td>' + FPP.escHtml(a.target_title || a.target_url || '') + '</td>';
+					html += '<td><span class="fpp-anchor-badge quality-' + badge + '">' + FPP.escHtml(badge) + '</span></td>';
+					html += '</tr>';
+				}
+				html += '</tbody></table>';
+			}
+
+			$('#fpp-anchor-results').html(html).show();
+			FPP.makeSortable($('#fpp-anchor-results').find('table'));
+		},
+
+		/* ── v6.0.0: Topic Clusters ───────────────────────────────────── */
+
+		analyzeClusters: function(e) {
+			if (e) e.preventDefault();
+			var $btn = $('#fpp-analyze-clusters-btn');
+			FPP.btnLoading($btn, fppInterlinking.i18n.analyzing || 'Analysing...');
+			$('#fpp-clusters-summary').text('');
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_analyze_clusters',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				FPP.btnReset($btn);
+				if (response.success) {
+					FPP.renderClusterResults(response.data);
+				} else {
+					FPP.showToast('error', response.data.message || fppInterlinking.i18n.request_failed);
+				}
+			}).fail(function() {
+				FPP.btnReset($btn);
+				FPP.showToast('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		renderClusterResults: function(data) {
+			var clusters = data.clusters || [];
+			$('#fpp-clusters-summary').text(
+				(fppInterlinking.i18n.clusters_summary || '%d topic clusters detected')
+					.replace('%d', clusters.length)
+			);
+
+			if (clusters.length === 0) {
+				$('#fpp-cluster-results').html(
+					'<div class="fpp-empty-state fpp-empty-state-small">'
+					+ '<span class="dashicons dashicons-category fpp-empty-icon"></span>'
+					+ '<p>' + FPP.escHtml(fppInterlinking.i18n.no_clusters || 'No topic clusters detected. Add more content to enable cluster analysis.') + '</p>'
+					+ '</div>'
+				).show();
+				return;
+			}
+
+			var html = '<div class="fpp-clusters-grid">';
+			for (var i = 0; i < clusters.length; i++) {
+				var c = clusters[i];
+				var pages = c.pages || [];
+				var keywords = c.shared_keywords || [];
+				var pillar = c.pillar || {};
+
+				html += '<div class="fpp-cluster-card">';
+				html += '<div class="fpp-cluster-header">';
+				html += '<span class="fpp-cluster-title">' + FPP.escHtml(fppInterlinking.i18n.cluster || 'Cluster') + ' #' + (i + 1) + '</span>';
+				html += '<span class="fpp-cluster-count">' + pages.length + ' pages</span>';
+				html += '</div>';
+
+				// Pillar page.
+				if (pillar.title) {
+					html += '<div class="fpp-cluster-pillar">';
+					html += '<span class="dashicons dashicons-star-filled"></span>';
+					html += '<div>';
+					html += '<span class="fpp-cluster-pillar-label">' + FPP.escHtml(fppInterlinking.i18n.pillar_page || 'Pillar Page') + '</span><br>';
+					html += '<span class="fpp-cluster-pillar-title">' + FPP.escHtml(pillar.title) + '</span>';
+					html += '</div></div>';
+				}
+
+				// Related pages.
+				html += '<ul class="fpp-cluster-pages">';
+				var pageLimit = Math.min(pages.length, 8);
+				for (var j = 0; j < pageLimit; j++) {
+					if (pages[j].id !== pillar.id) {
+						html += '<li>' + FPP.escHtml(pages[j].title || '') + '</li>';
+					}
+				}
+				if (pages.length > 8) {
+					html += '<li style="color:var(--fpp-text-light)">+' + (pages.length - 8) + ' more</li>';
+				}
+				html += '</ul>';
+
+				// Shared keywords.
+				if (keywords.length > 0) {
+					html += '<div class="fpp-cluster-keywords">';
+					var kwLimit = Math.min(keywords.length, 6);
+					for (var k = 0; k < kwLimit; k++) {
+						html += '<span class="fpp-cluster-keyword-tag">' + FPP.escHtml(keywords[k]) + '</span>';
+					}
+					html += '</div>';
+				}
+
+				html += '</div>'; // close card
+			}
+			html += '</div>'; // close grid
+
+			$('#fpp-cluster-results').html(html).show();
+		},
+
+		/* ── v6.0.0: JSON Import/Export ───────────────────────────────── */
+
+		exportJson: function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			$btn.prop('disabled', true);
+
+			$.post(fppInterlinking.ajax_url, {
+				action: 'fpp_interlinking_export_json',
+				nonce:  fppInterlinking.nonce
+			}, function(response) {
+				$btn.prop('disabled', false);
+				if (response.success) {
+					var json = JSON.stringify(response.data, null, 2);
+					var blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+					var link = document.createElement('a');
+					link.href = URL.createObjectURL(blob);
+					link.download = 'wp-interlinking-export-' + new Date().toISOString().slice(0, 10) + '.json';
+					link.click();
+					URL.revokeObjectURL(link.href);
+					FPP.showToast('success', fppInterlinking.i18n.json_exported || 'JSON exported successfully.');
+				} else {
+					FPP.showNotice('error', response.data.message);
+				}
+			}).fail(function() {
+				$btn.prop('disabled', false);
+				FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+			});
+		},
+
+		importJson: function() {
+			var file = this.files[0];
+			if (!file) return;
+
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				var content = e.target.result;
+				try {
+					JSON.parse(content); // validate
+				} catch (err) {
+					FPP.showNotice('error', fppInterlinking.i18n.invalid_json || 'Invalid JSON file.');
+					return;
+				}
+
+				$.post(fppInterlinking.ajax_url, {
+					action:    'fpp_interlinking_import_json',
+					nonce:     fppInterlinking.nonce,
+					json_data: content,
+					import_settings: 1
+				}, function(response) {
+					if (response.success) {
+						FPP.showNotice('success', response.data.message);
+						FPP.loadKeywordsTable(1);
+					} else {
+						FPP.showNotice('error', response.data.message);
+					}
+				}).fail(function() {
+					FPP.showNotice('error', fppInterlinking.i18n.request_failed);
+				});
+			};
+			reader.readAsText(file);
+			$(this).val('');
+		},
+
+		/* ── v6.0.0: Onboarding ───────────────────────────────────────── */
+
+		maybeShowOnboarding: function() {
+			if (typeof localStorage === 'undefined') return;
+			if (localStorage.getItem('fpp_onboarding_dismissed')) return;
+			$('#fpp-onboarding').slideDown(300);
+		},
+
+		dismissOnboarding: function(e) {
+			e.preventDefault();
+			$('#fpp-onboarding').slideUp(300);
+			if (typeof localStorage !== 'undefined') {
+				localStorage.setItem('fpp_onboarding_dismissed', '1');
+			}
 		},
 
 		/* ── v4.0.0: Sparkline Mini Charts ──────────────────────────── */

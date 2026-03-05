@@ -146,9 +146,11 @@ class FPP_Interlinking_DB {
 				'nofollow'         => absint( $data['nofollow'] ),
 				'new_tab'          => absint( $data['new_tab'] ),
 				'max_replacements' => $max,
+				'rel_sponsored'    => isset( $data['rel_sponsored'] ) ? absint( $data['rel_sponsored'] ) : 0,
+				'rel_ugc'          => isset( $data['rel_ugc'] ) ? absint( $data['rel_ugc'] ) : 0,
 				'is_active'        => 1,
 			),
-			array( '%s', '%s', '%d', '%d', '%d', '%d' )
+			array( '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d' )
 		);
 
 		if ( false === $result ) {
@@ -191,10 +193,12 @@ class FPP_Interlinking_DB {
 				'nofollow'         => absint( $data['nofollow'] ),
 				'new_tab'          => absint( $data['new_tab'] ),
 				'max_replacements' => $max,
+				'rel_sponsored'    => isset( $data['rel_sponsored'] ) ? absint( $data['rel_sponsored'] ) : 0,
+				'rel_ugc'          => isset( $data['rel_ugc'] ) ? absint( $data['rel_ugc'] ) : 0,
 				'is_active'        => isset( $data['is_active'] ) ? absint( $data['is_active'] ) : 1,
 			),
 			array( 'id' => absint( $id ) ),
-			array( '%s', '%s', '%d', '%d', '%d', '%d' ),
+			array( '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d' ),
 			array( '%d' )
 		);
 
@@ -402,7 +406,7 @@ class FPP_Interlinking_DB {
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		return $wpdb->get_results(
-			"SELECT keyword, target_url, nofollow, new_tab, max_replacements, is_active FROM {$table} ORDER BY keyword ASC",
+			"SELECT keyword, target_url, nofollow, new_tab, max_replacements, rel_sponsored, rel_ugc, is_active FROM {$table} ORDER BY keyword ASC",
 			ARRAY_A
 		);
 	}
@@ -442,6 +446,8 @@ class FPP_Interlinking_DB {
 				'nofollow'         => isset( $row['nofollow'] ) ? absint( $row['nofollow'] ) : 0,
 				'new_tab'          => isset( $row['new_tab'] ) ? absint( $row['new_tab'] ) : 1,
 				'max_replacements' => isset( $row['max_replacements'] ) ? absint( $row['max_replacements'] ) : 0,
+				'rel_sponsored'    => isset( $row['rel_sponsored'] ) ? absint( $row['rel_sponsored'] ) : 0,
+				'rel_ugc'          => isset( $row['rel_ugc'] ) ? absint( $row['rel_ugc'] ) : 0,
 			) );
 
 			if ( $result ) {

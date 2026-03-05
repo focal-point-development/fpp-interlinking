@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       WP Interlinking
  * Plugin URI:        https://developer.wordpress.org/plugins/
- * Description:       Smart SEO internal linking with TF-IDF analysis, site health scoring, orphan page detection, link distribution analysis, and AI support. Map keywords to URLs with automatic replacement, keyword extraction, relevance scoring, content gap analysis, CTR tracking, and Chart.js visualisations. Supports OpenAI, Anthropic, Ollama, Google Gemini, Mistral AI, and DeepSeek.
- * Version:           5.0.0
+ * Description:       Smart SEO deep linking with Unicode support, Internal Link Rank (ILR), crawl depth analysis, anchor text quality, topic cluster detection, and AI support. Map keywords to URLs with automatic replacement, keyword extraction, relevance scoring, content gap analysis, CTR tracking, JSON import/export, and Chart.js visualisations. Supports OpenAI, Anthropic, Ollama, Google Gemini, Mistral AI, and DeepSeek.
+ * Version:           6.0.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            FPP
@@ -24,8 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin constants.
  */
-define( 'FPP_INTERLINKING_VERSION', '5.0.0' );
-define( 'FPP_INTERLINKING_DB_VERSION', '3.0.0' );
+define( 'FPP_INTERLINKING_VERSION', '6.0.0' );
+define( 'FPP_INTERLINKING_DB_VERSION', '4.0.0' );
 define( 'FPP_INTERLINKING_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'FPP_INTERLINKING_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );

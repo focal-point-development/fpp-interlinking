@@ -1153,13 +1153,17 @@ class FPP_Interlinking_Analyzer {
 	public static function clear_caches() {
 		global $wpdb;
 
-		// Delete all fpp_ analysis transients.
+		// Delete all fpp_ analysis transients (IDF, link graph, ILR, crawl depth).
 		$wpdb->query(
 			"DELETE FROM {$wpdb->options}
 			 WHERE option_name LIKE '_transient_fpp_idf_%'
 			    OR option_name LIKE '_transient_timeout_fpp_idf_%'
 			    OR option_name LIKE '_transient_fpp_link_graph_%'
-			    OR option_name LIKE '_transient_timeout_fpp_link_graph_%'"
+			    OR option_name LIKE '_transient_timeout_fpp_link_graph_%'
+			    OR option_name LIKE '_transient_fpp_ilr_%'
+			    OR option_name LIKE '_transient_timeout_fpp_ilr_%'
+			    OR option_name LIKE '_transient_fpp_crawl_depth_%'
+			    OR option_name LIKE '_transient_timeout_fpp_crawl_depth_%'"
 		);
 	}
 
@@ -1247,6 +1251,10 @@ class FPP_Interlinking_Analyzer {
 
 		$total = count( $all_ids );
 
+		// v6.0.0: Track individual link pairs for ILR and crawl depth algorithms.
+		$links       = array();
+		$anchor_data = array(); // v6.0.0: Anchor text tracking for analysis.
+
 		// Second pass: parse links.
 		foreach ( $all_ids as $pid ) {
 			$post = get_post( $pid );
@@ -1255,13 +1263,15 @@ class FPP_Interlinking_Analyzer {
 			}
 
 			$raw = $post->post_content;
-			if ( ! preg_match_all( '/<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>/is', $raw, $lm ) ) {
+			if ( ! preg_match_all( '/<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)<\/a>/isu', $raw, $lm, PREG_SET_ORDER ) ) {
 				continue;
 			}
 
 			$linked_ids = array(); // Deduplicate per-post.
-			foreach ( $lm[1] as $href ) {
-				$link_host = wp_parse_url( $href, PHP_URL_HOST );
+			foreach ( $lm as $match ) {
+				$href        = $match[1];
+				$anchor_text = wp_strip_all_tags( $match[2] );
+				$link_host   = wp_parse_url( $href, PHP_URL_HOST );
 
 				// Only count internal links.
 				if ( ! empty( $link_host ) && $link_host !== $home_host ) {
@@ -1286,20 +1296,33 @@ class FPP_Interlinking_Analyzer {
 						continue;
 					}
 
+					// v6.0.0: Store anchor text data for anchor analysis.
+					$anchor_data[] = array(
+						'source'      => $pid,
+						'target'      => $target_id,
+						'anchor_text' => trim( $anchor_text ),
+					);
+
 					if ( ! isset( $linked_ids[ $target_id ] ) ) {
 						$linked_ids[ $target_id ] = true;
 						$outbound[ $pid ]++;
 						$inbound[ $target_id ]++;
+						$links[] = array(
+							'source' => $pid,
+							'target' => $target_id,
+						);
 					}
 				}
 			}
 		}
 
 		$result = array(
-			'inbound'   => $inbound,
-			'outbound'  => $outbound,
-			'post_info' => $post_info,
-			'total'     => $total,
+			'inbound'     => $inbound,
+			'outbound'    => $outbound,
+			'post_info'   => $post_info,
+			'total'       => $total,
+			'links'       => $links,       // v6.0.0: Directed link pairs.
+			'anchor_data' => $anchor_data, // v6.0.0: Anchor text per link.
 		);
 
 		set_transient( $cache_key, $result, 6 * HOUR_IN_SECONDS );
@@ -1447,6 +1470,686 @@ class FPP_Interlinking_Analyzer {
 		);
 	}
 
+	/* ── v6.0.0: Deep Linking Intelligence ───────────────────────────── */
+
+	/**
+	 * Calculate Internal Link Rank (ILR) for all pages.
+	 *
+	 * Implements a simplified PageRank algorithm that distributes link
+	 * equity through the site graph. Pages are classified as strong
+	 * (top 30%), medium (middle 40%), or weak (bottom 30%) based on
+	 * their computed ILR score.
+	 *
+	 * Per Semrush best practices: link FROM strong pages TO weak pages
+	 * with business value to distribute authority effectively.
+	 *
+	 * @since 6.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'pages'          => array[] Per-page ILR data,
+	 *     'total_pages'    => int,
+	 *     'strong_count'   => int,
+	 *     'medium_count'   => int,
+	 *     'weak_count'     => int,
+	 *     'recommendations' => array[] Strategic linking suggestions,
+	 * }
+	 */
+	public static function calculate_ilr( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$cache_key = 'fpp_ilr_' . md5( implode( ',', $post_types ) );
+		$cached    = get_transient( $cache_key );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		$graph = self::build_link_graph( $post_types );
+		$total = count( $graph['post_info'] );
+
+		if ( 0 === $total ) {
+			return array(
+				'pages'           => array(),
+				'total_pages'     => 0,
+				'strong_count'    => 0,
+				'medium_count'    => 0,
+				'weak_count'      => 0,
+				'recommendations' => array(),
+			);
+		}
+
+		$post_ids = array_keys( $graph['post_info'] );
+		$damping  = 0.85;
+
+		// Initialize ILR scores equally.
+		$ilr     = array();
+		$initial = 100.0 / $total;
+		foreach ( $post_ids as $pid ) {
+			$ilr[ $pid ] = $initial;
+		}
+
+		// Build outbound link map: source_pid => array of target_pids.
+		$outlinks = array();
+		foreach ( $post_ids as $pid ) {
+			$outlinks[ $pid ] = array();
+		}
+		if ( ! empty( $graph['links'] ) ) {
+			foreach ( $graph['links'] as $link ) {
+				$src = $link['source'];
+				$tgt = $link['target'];
+				if ( isset( $outlinks[ $src ] ) ) {
+					$outlinks[ $src ][] = $tgt;
+				}
+			}
+		}
+
+		// Build inbound link map: target_pid => array of source_pids.
+		$inlinks = array();
+		foreach ( $post_ids as $pid ) {
+			$inlinks[ $pid ] = array();
+		}
+		foreach ( $outlinks as $src => $targets ) {
+			foreach ( $targets as $tgt ) {
+				if ( isset( $inlinks[ $tgt ] ) ) {
+					$inlinks[ $tgt ][] = $src;
+				}
+			}
+		}
+
+		// Iterative PageRank-lite (10 iterations).
+		for ( $iter = 0; $iter < 10; $iter++ ) {
+			$new_ilr = array();
+			foreach ( $post_ids as $pid ) {
+				$rank = ( 1 - $damping ) / $total * 100;
+				foreach ( $inlinks[ $pid ] as $src ) {
+					$out_count = count( $outlinks[ $src ] );
+					if ( $out_count > 0 ) {
+						$rank += $damping * ( $ilr[ $src ] / $out_count );
+					}
+				}
+				$new_ilr[ $pid ] = $rank;
+			}
+			$ilr = $new_ilr;
+		}
+
+		// Normalize to 0-100 scale.
+		$max_ilr = max( $ilr );
+		$min_ilr = min( $ilr );
+		$range   = $max_ilr - $min_ilr;
+		if ( $range > 0 ) {
+			foreach ( $ilr as $pid => $score ) {
+				$ilr[ $pid ] = ( ( $score - $min_ilr ) / $range ) * 100;
+			}
+		}
+
+		// Classify: determine thresholds using percentiles.
+		$sorted_scores = array_values( $ilr );
+		sort( $sorted_scores );
+		$p30 = $sorted_scores[ (int) floor( $total * 0.3 ) ];
+		$p70 = $sorted_scores[ (int) floor( $total * 0.7 ) ];
+
+		$pages        = array();
+		$strong       = array();
+		$weak         = array();
+		$strong_count = 0;
+		$medium_count = 0;
+		$weak_count   = 0;
+
+		foreach ( $graph['post_info'] as $pid => $info ) {
+			$score = round( $ilr[ $pid ], 1 );
+			if ( $score > $p70 ) {
+				$class = 'strong';
+				$strong_count++;
+				$strong[] = $pid;
+			} elseif ( $score <= $p30 ) {
+				$class = 'weak';
+				$weak_count++;
+				$weak[] = $pid;
+			} else {
+				$class = 'medium';
+				$medium_count++;
+			}
+
+			$pages[] = array(
+				'id'       => $pid,
+				'title'    => $info['title'],
+				'url'      => $info['url'],
+				'type'     => $info['type'],
+				'ilr'      => $score,
+				'class'    => $class,
+				'inbound'  => isset( $graph['inbound'][ $pid ] ) ? $graph['inbound'][ $pid ] : 0,
+				'outbound' => isset( $graph['outbound'][ $pid ] ) ? $graph['outbound'][ $pid ] : 0,
+			);
+		}
+
+		// Sort by ILR descending.
+		usort( $pages, function( $a, $b ) {
+			return $b['ilr'] <=> $a['ilr'];
+		} );
+
+		// Generate recommendations: link FROM strong TO weak.
+		$recommendations = array();
+		$max_recs        = min( 10, count( $strong ), count( $weak ) );
+		for ( $i = 0; $i < $max_recs; $i++ ) {
+			$s_pid  = $strong[ $i ];
+			$w_pid  = $weak[ $i ];
+			$s_info = $graph['post_info'][ $s_pid ];
+			$w_info = $graph['post_info'][ $w_pid ];
+
+			$recommendations[] = array(
+				'from_title' => $s_info['title'],
+				'from_url'   => $s_info['url'],
+				'from_ilr'   => round( $ilr[ $s_pid ], 1 ),
+				'to_title'   => $w_info['title'],
+				'to_url'     => $w_info['url'],
+				'to_ilr'     => round( $ilr[ $w_pid ], 1 ),
+			);
+		}
+
+		$result = array(
+			'pages'           => $pages,
+			'total_pages'     => $total,
+			'strong_count'    => $strong_count,
+			'medium_count'    => $medium_count,
+			'weak_count'      => $weak_count,
+			'recommendations' => $recommendations,
+		);
+
+		set_transient( $cache_key, $result, 6 * HOUR_IN_SECONDS );
+		return $result;
+	}
+
+	/**
+	 * Calculate crawl depth for all pages via BFS from homepage.
+	 *
+	 * Per Google's link best practices: every page should be reachable
+	 * from at least one other page. Pages deeper than 3 clicks from the
+	 * homepage are harder for search engines to discover and index.
+	 *
+	 * @since 6.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'pages'             => array[] Per-page depth data,
+	 *     'unreachable'       => array[] Pages not reachable from homepage,
+	 *     'depth_distribution' => array  depth_level => count,
+	 *     'max_depth'         => int,
+	 *     'avg_depth'         => float,
+	 *     'total_pages'       => int,
+	 * }
+	 */
+	public static function calculate_crawl_depth( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$cache_key = 'fpp_crawl_depth_' . md5( implode( ',', $post_types ) );
+		$cached    = get_transient( $cache_key );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		$graph = self::build_link_graph( $post_types );
+		$total = count( $graph['post_info'] );
+
+		if ( 0 === $total ) {
+			return array(
+				'pages'              => array(),
+				'unreachable'        => array(),
+				'depth_distribution' => array(),
+				'max_depth'          => 0,
+				'avg_depth'          => 0,
+				'total_pages'        => 0,
+			);
+		}
+
+		// Find the homepage post ID.
+		$front_page_id = (int) get_option( 'page_on_front', 0 );
+		$blog_page_id  = (int) get_option( 'page_for_posts', 0 );
+		$home_url      = home_url( '/' );
+
+		// Try to find a post matching the homepage URL.
+		$start_pid = 0;
+		if ( $front_page_id && isset( $graph['post_info'][ $front_page_id ] ) ) {
+			$start_pid = $front_page_id;
+		} elseif ( $blog_page_id && isset( $graph['post_info'][ $blog_page_id ] ) ) {
+			$start_pid = $blog_page_id;
+		} else {
+			// Fall back to the page with most outbound links.
+			$max_out = -1;
+			foreach ( $graph['post_info'] as $pid => $info ) {
+				$out = isset( $graph['outbound'][ $pid ] ) ? $graph['outbound'][ $pid ] : 0;
+				if ( $out > $max_out ) {
+					$max_out   = $out;
+					$start_pid = $pid;
+				}
+			}
+		}
+
+		// Build outbound adjacency list.
+		$adj = array();
+		foreach ( array_keys( $graph['post_info'] ) as $pid ) {
+			$adj[ $pid ] = array();
+		}
+		if ( ! empty( $graph['links'] ) ) {
+			foreach ( $graph['links'] as $link ) {
+				if ( isset( $adj[ $link['source'] ] ) ) {
+					$adj[ $link['source'] ][] = $link['target'];
+				}
+			}
+		}
+
+		// BFS from start.
+		$depth   = array();
+		$visited = array();
+		$queue   = array( array( $start_pid, 0 ) );
+		$visited[ $start_pid ] = true;
+		$depth[ $start_pid ]   = 0;
+
+		while ( ! empty( $queue ) ) {
+			list( $current, $d ) = array_shift( $queue );
+			if ( isset( $adj[ $current ] ) ) {
+				foreach ( $adj[ $current ] as $neighbor ) {
+					if ( ! isset( $visited[ $neighbor ] ) ) {
+						$visited[ $neighbor ] = true;
+						$depth[ $neighbor ]   = $d + 1;
+						$queue[]              = array( $neighbor, $d + 1 );
+					}
+				}
+			}
+		}
+
+		// Build results.
+		$pages         = array();
+		$unreachable   = array();
+		$distribution  = array();
+		$total_depth   = 0;
+		$reachable_cnt = 0;
+		$max_depth     = 0;
+
+		foreach ( $graph['post_info'] as $pid => $info ) {
+			if ( isset( $depth[ $pid ] ) ) {
+				$d = $depth[ $pid ];
+				$pages[] = array(
+					'id'    => $pid,
+					'title' => $info['title'],
+					'url'   => $info['url'],
+					'type'  => $info['type'],
+					'depth' => $d,
+				);
+				if ( ! isset( $distribution[ $d ] ) ) {
+					$distribution[ $d ] = 0;
+				}
+				$distribution[ $d ]++;
+				$total_depth += $d;
+				$reachable_cnt++;
+				if ( $d > $max_depth ) {
+					$max_depth = $d;
+				}
+			} else {
+				$unreachable[] = array(
+					'id'    => $pid,
+					'title' => $info['title'],
+					'url'   => $info['url'],
+					'type'  => $info['type'],
+				);
+			}
+		}
+
+		// Sort pages by depth ascending.
+		usort( $pages, function( $a, $b ) {
+			return $a['depth'] - $b['depth'];
+		} );
+
+		ksort( $distribution );
+
+		$result = array(
+			'pages'              => $pages,
+			'unreachable'        => $unreachable,
+			'depth_distribution' => $distribution,
+			'max_depth'          => $max_depth,
+			'avg_depth'          => $reachable_cnt > 0 ? round( $total_depth / $reachable_cnt, 1 ) : 0,
+			'total_pages'        => $total,
+		);
+
+		set_transient( $cache_key, $result, 6 * HOUR_IN_SECONDS );
+		return $result;
+	}
+
+	/**
+	 * Get total published post count for configured post types.
+	 *
+	 * Used for progress calculation in batch operations.
+	 *
+	 * @since 6.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return int Total count.
+	 */
+	public static function get_total_post_count( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$query = new WP_Query( array(
+			'post_type'      => $post_types,
+			'post_status'    => 'publish',
+			'posts_per_page' => 1,
+			'fields'         => 'ids',
+			'no_found_rows'  => false,
+		) );
+
+		return (int) $query->found_posts;
+	}
+
+	/**
+	 * Analyse anchor text quality across all internal links.
+	 *
+	 * Per Google's link best practices: anchor text should be descriptive,
+	 * concise, and tell users and search engines about the linked page.
+	 * Avoid generic phrases like "click here" or "read more".
+	 *
+	 * @since 6.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'links'            => array[] Per-link anchor data with quality,
+	 *     'overall_quality'  => float   0-100 quality percentage,
+	 *     'total_links'      => int,
+	 *     'good_count'       => int,
+	 *     'warning_count'    => int,
+	 *     'poor_count'       => int,
+	 * }
+	 */
+	public static function analyze_anchor_text( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		$graph = self::build_link_graph( $post_types );
+
+		// Generic anchor patterns to flag.
+		$generic_anchors = array(
+			'click here', 'read more', 'learn more', 'this article',
+			'this post', 'this page', 'here', 'link', 'website', 'page',
+			'more info', 'more information', 'find out more', 'see more',
+			'check it out', 'go here', 'visit', 'continue reading',
+			'full article', 'source', 'read on', 'details',
+		);
+
+		$links       = array();
+		$good_count  = 0;
+		$warn_count  = 0;
+		$poor_count  = 0;
+
+		if ( ! empty( $graph['anchor_data'] ) ) {
+			foreach ( $graph['anchor_data'] as $ad ) {
+				$anchor = trim( $ad['anchor_text'] );
+				$src    = $ad['source'];
+				$tgt    = $ad['target'];
+
+				$src_info = isset( $graph['post_info'][ $src ] ) ? $graph['post_info'][ $src ] : null;
+				$tgt_info = isset( $graph['post_info'][ $tgt ] ) ? $graph['post_info'][ $tgt ] : null;
+
+				if ( ! $src_info || ! $tgt_info ) {
+					continue;
+				}
+
+				// Evaluate anchor quality.
+				$quality    = 'good';
+				$suggestion = '';
+				$lower      = mb_strtolower( $anchor, 'UTF-8' );
+
+				if ( empty( $anchor ) ) {
+					$quality    = 'poor';
+					$suggestion = __( 'Empty anchor text — add descriptive text about the linked page.', 'fpp-interlinking' );
+				} elseif ( in_array( $lower, $generic_anchors, true ) ) {
+					$quality    = 'poor';
+					$suggestion = sprintf(
+						__( 'Generic anchor "%s" — use descriptive text related to the target page.', 'fpp-interlinking' ),
+						$anchor
+					);
+				} elseif ( mb_strlen( $anchor, 'UTF-8' ) > 60 ) {
+					$quality    = 'warning';
+					$suggestion = __( 'Anchor text is too long — keep it under 5 words for best readability.', 'fpp-interlinking' );
+				} elseif ( mb_strlen( $anchor, 'UTF-8' ) < 3 ) {
+					$quality    = 'warning';
+					$suggestion = __( 'Anchor text is very short — add more descriptive context.', 'fpp-interlinking' );
+				}
+
+				if ( 'good' === $quality ) {
+					$good_count++;
+				} elseif ( 'warning' === $quality ) {
+					$warn_count++;
+				} else {
+					$poor_count++;
+				}
+
+				$links[] = array(
+					'source_title' => $src_info['title'],
+					'source_url'   => $src_info['url'],
+					'target_title' => $tgt_info['title'],
+					'target_url'   => $tgt_info['url'],
+					'anchor_text'  => $anchor,
+					'quality'      => $quality,
+					'suggestion'   => $suggestion,
+				);
+			}
+		}
+
+		$total = count( $links );
+
+		// Sort: poor first, then warning, then good.
+		usort( $links, function( $a, $b ) {
+			$order = array( 'poor' => 0, 'warning' => 1, 'good' => 2 );
+			return ( $order[ $a['quality'] ] ?? 2 ) - ( $order[ $b['quality'] ] ?? 2 );
+		} );
+
+		return array(
+			'links'           => array_slice( $links, 0, 100 ), // Limit to 100 for UI.
+			'overall_quality' => $total > 0 ? round( ( $good_count / $total ) * 100, 1 ) : 100,
+			'total_links'     => $total,
+			'good_count'      => $good_count,
+			'warning_count'   => $warn_count,
+			'poor_count'      => $poor_count,
+		);
+	}
+
+	/**
+	 * Detect topic clusters — groups of related content.
+	 *
+	 * Uses TF-IDF keywords to find posts sharing 3+ keywords, groups
+	 * them into clusters using union-find, and identifies the pillar page
+	 * (most inbound links) per cluster.
+	 *
+	 * Per Semrush best practices: interconnected topic clusters signal
+	 * topical expertise and improve E-E-A-T signals.
+	 *
+	 * @since 6.0.0
+	 *
+	 * @param array $post_types Post type slugs.
+	 * @return array {
+	 *     'clusters'       => array[] Each with 'pillar', 'pages', 'keywords',
+	 *     'total_clusters' => int,
+	 *     'clustered_pages' => int,
+	 *     'unclustered_pages' => int,
+	 * }
+	 */
+	public static function detect_topic_clusters( $post_types = array() ) {
+		if ( empty( $post_types ) ) {
+			$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		}
+
+		// Fetch posts.
+		$posts = get_posts( array(
+			'post_type'      => $post_types,
+			'post_status'    => 'publish',
+			'posts_per_page' => 200, // Limit for performance.
+			'fields'         => 'ids',
+		) );
+
+		if ( count( $posts ) < 2 ) {
+			return array(
+				'clusters'          => array(),
+				'total_clusters'    => 0,
+				'clustered_pages'   => 0,
+				'unclustered_pages' => count( $posts ),
+			);
+		}
+
+		// Extract top 5 keywords per post.
+		$post_keywords = array();
+		foreach ( $posts as $pid ) {
+			$kws = self::extract_keywords( $pid, 5 );
+			if ( ! empty( $kws ) ) {
+				$post_keywords[ $pid ] = array_column( $kws, 'keyword' );
+			}
+		}
+
+		// Build co-occurrence: find post pairs sharing 3+ keywords.
+		$pairs     = array();
+		$post_ids  = array_keys( $post_keywords );
+		$count_ids = count( $post_ids );
+
+		for ( $i = 0; $i < $count_ids; $i++ ) {
+			for ( $j = $i + 1; $j < $count_ids; $j++ ) {
+				$a = $post_ids[ $i ];
+				$b = $post_ids[ $j ];
+
+				$shared = array_intersect(
+					array_map( function( $k ) { return mb_strtolower( $k, 'UTF-8' ); }, $post_keywords[ $a ] ),
+					array_map( function( $k ) { return mb_strtolower( $k, 'UTF-8' ); }, $post_keywords[ $b ] )
+				);
+
+				if ( count( $shared ) >= 2 ) { // 2+ shared keywords = related.
+					$pairs[] = array( $a, $b, array_values( $shared ) );
+				}
+			}
+		}
+
+		// Union-Find to group connected posts.
+		$parent = array();
+		foreach ( $post_ids as $pid ) {
+			$parent[ $pid ] = $pid;
+		}
+
+		$find = function( $x ) use ( &$parent, &$find ) {
+			if ( $parent[ $x ] !== $x ) {
+				$parent[ $x ] = $find( $parent[ $x ] );
+			}
+			return $parent[ $x ];
+		};
+
+		$union = function( $x, $y ) use ( &$parent, &$find ) {
+			$rx = $find( $x );
+			$ry = $find( $y );
+			if ( $rx !== $ry ) {
+				$parent[ $rx ] = $ry;
+			}
+		};
+
+		$cluster_keywords = array(); // Track keywords per cluster.
+		foreach ( $pairs as $pair ) {
+			$union( $pair[0], $pair[1] );
+		}
+
+		// Group posts by cluster root.
+		$groups = array();
+		foreach ( $post_ids as $pid ) {
+			$root = $find( $pid );
+			if ( ! isset( $groups[ $root ] ) ) {
+				$groups[ $root ] = array();
+			}
+			$groups[ $root ][] = $pid;
+		}
+
+		// Collect shared keywords per cluster.
+		foreach ( $pairs as $pair ) {
+			$root = $find( $pair[0] );
+			if ( ! isset( $cluster_keywords[ $root ] ) ) {
+				$cluster_keywords[ $root ] = array();
+			}
+			foreach ( $pair[2] as $kw ) {
+				$cluster_keywords[ $root ][ $kw ] = true;
+			}
+		}
+
+		// Build link graph for pillar detection.
+		$graph = self::build_link_graph( $post_types );
+
+		// Filter clusters with 2+ posts and identify pillars.
+		$clusters        = array();
+		$clustered_count = 0;
+
+		foreach ( $groups as $root => $members ) {
+			if ( count( $members ) < 2 ) {
+				continue;
+			}
+
+			// Find pillar page: most inbound links within cluster.
+			$pillar_id  = $members[0];
+			$max_inbound = -1;
+			foreach ( $members as $pid ) {
+				$in = isset( $graph['inbound'][ $pid ] ) ? $graph['inbound'][ $pid ] : 0;
+				if ( $in > $max_inbound ) {
+					$max_inbound = $in;
+					$pillar_id   = $pid;
+				}
+			}
+
+			$pillar_info = isset( $graph['post_info'][ $pillar_id ] ) ? $graph['post_info'][ $pillar_id ] : null;
+			if ( ! $pillar_info ) {
+				continue;
+			}
+
+			$pages = array();
+			foreach ( $members as $pid ) {
+				if ( $pid === $pillar_id ) {
+					continue;
+				}
+				$info = isset( $graph['post_info'][ $pid ] ) ? $graph['post_info'][ $pid ] : null;
+				if ( $info ) {
+					$pages[] = array(
+						'id'    => $pid,
+						'title' => $info['title'],
+						'url'   => $info['url'],
+						'type'  => $info['type'],
+					);
+				}
+			}
+
+			$kws = isset( $cluster_keywords[ $root ] ) ? array_keys( $cluster_keywords[ $root ] ) : array();
+
+			$clusters[] = array(
+				'pillar' => array(
+					'id'    => $pillar_id,
+					'title' => $pillar_info['title'],
+					'url'   => $pillar_info['url'],
+					'type'  => $pillar_info['type'],
+				),
+				'pages'    => $pages,
+				'keywords' => array_slice( $kws, 0, 10 ),
+				'size'     => count( $members ),
+			);
+
+			$clustered_count += count( $members );
+		}
+
+		// Sort by cluster size descending.
+		usort( $clusters, function( $a, $b ) {
+			return $b['size'] - $a['size'];
+		} );
+
+		return array(
+			'clusters'          => $clusters,
+			'total_clusters'    => count( $clusters ),
+			'clustered_pages'   => $clustered_count,
+			'unclustered_pages' => count( $posts ) - $clustered_count,
+		);
+	}
+
 	/* ── Private Helpers ──────────────────────────────────────────────── */
 
 	/**
@@ -1463,8 +2166,8 @@ class FPP_Interlinking_Analyzer {
 		$content = wp_strip_all_tags( $content );
 		$content = html_entity_decode( $content, ENT_QUOTES, 'UTF-8' );
 
-		// Collapse whitespace.
-		$content = preg_replace( '/\s+/', ' ', $content );
+		// Collapse whitespace (Unicode-safe).
+		$content = preg_replace( '/\s+/u', ' ', $content );
 		return trim( $content );
 	}
 
@@ -1477,17 +2180,20 @@ class FPP_Interlinking_Analyzer {
 	 * @return string[] Lowercase word tokens.
 	 */
 	private static function tokenize( $text ) {
-		$text = strtolower( $text );
+		// v6.0.0: Use mb_strtolower for proper Unicode lowercase (ö, ü, ä, é, ñ).
+		$text = mb_strtolower( $text, 'UTF-8' );
 
-		// Remove punctuation except hyphens and apostrophes within words.
-		$text = preg_replace( '/[^\w\s\'-]/', ' ', $text );
-		$text = preg_replace( '/\s+/', ' ', $text );
+		// v6.0.0: Use Unicode-aware character classes so accented chars (ö, ü, ä, é)
+		// are treated as word characters. \p{L} = Unicode letter, \p{N} = Unicode number.
+		$text = preg_replace( '/[^\p{L}\p{N}\s\'-]/u', ' ', $text );
+		$text = preg_replace( '/\s+/u', ' ', $text );
 
 		$tokens = explode( ' ', trim( $text ) );
 
 		// Filter out purely numeric tokens and very short tokens.
+		// v6.0.0: Use mb_strlen for proper multi-byte character counting.
 		return array_values( array_filter( $tokens, function( $t ) {
-			return strlen( $t ) >= 2 && ! is_numeric( $t );
+			return mb_strlen( $t, 'UTF-8' ) >= 2 && ! is_numeric( $t );
 		} ) );
 	}
 
@@ -1602,7 +2308,14 @@ class FPP_Interlinking_Analyzer {
 		$stem = $word;
 
 		// Don't stem short words.
-		if ( strlen( $stem ) <= 3 ) {
+		if ( mb_strlen( $stem, 'UTF-8' ) <= 3 ) {
+			$cache[ $word ] = $stem;
+			return $stem;
+		}
+
+		// v6.0.0: Skip stemming for non-ASCII words (Göring, naïve, café, etc.).
+		// The Porter stemmer is English-only and would corrupt multi-byte chars.
+		if ( preg_match( '/[^\x00-\x7F]/', $stem ) ) {
 			$cache[ $word ] = $stem;
 			return $stem;
 		}
@@ -1736,12 +2449,13 @@ class FPP_Interlinking_Analyzer {
 	 * @return bool
 	 */
 	private static function stem_cvc( $str ) {
-		if ( strlen( $str ) < 3 ) {
+		$len = strlen( $str );
+		if ( $len < 3 ) {
 			return false;
 		}
-		$c3 = $str[ strlen( $str ) - 1 ];
-		$c2 = $str[ strlen( $str ) - 2 ];
-		$c1 = $str[ strlen( $str ) - 3 ];
+		$c3 = $str[ $len - 1 ];
+		$c2 = $str[ $len - 2 ];
+		$c1 = $str[ $len - 3 ];
 		if ( in_array( $c3, array( 'w', 'x', 'y' ), true ) ) {
 			return false;
 		}

@@ -107,8 +107,9 @@ class FPP_Interlinking_Replacer {
 
 		// Sort by keyword length descending to prevent partial matches.
 		// e.g. "WordPress SEO" is processed before "WordPress".
+		// Uses mb_strlen for proper Unicode character counting.
 		usort( $keywords, function ( $a, $b ) {
-			return strlen( $b['keyword'] ) - strlen( $a['keyword'] );
+			return mb_strlen( $b['keyword'], 'UTF-8' ) - mb_strlen( $a['keyword'], 'UTF-8' );
 		} );
 
 		/*
@@ -137,7 +138,7 @@ class FPP_Interlinking_Replacer {
 			. '|<option\b[^>]*>.*?<\/option>'           // Option elements.
 			. '|<!--.*?-->'                              // HTML comments.
 			. '|<[^>]+>'                                 // Any HTML tag.
-			. ')/is';
+			. ')/isu';  // Added /u for UTF-8 Unicode support.
 
 		$parts = preg_split( $protected_pattern, $content, -1, PREG_SPLIT_DELIM_CAPTURE );
 
@@ -165,11 +166,21 @@ class FPP_Interlinking_Replacer {
 			$nofollow = (int) $mapping['nofollow'] ? true : (bool) $global_nofollow;
 			$new_tab  = (int) $mapping['new_tab'] ? true : (bool) $global_new_tab;
 
+			// v6.0.0: Per-keyword rel="sponsored" and rel="ugc" attributes.
+			$sponsored = ! empty( $mapping['rel_sponsored'] ) ? (bool) $mapping['rel_sponsored'] : false;
+			$ugc       = ! empty( $mapping['rel_ugc'] ) ? (bool) $mapping['rel_ugc'] : false;
+
 			// Escape URL late, at the point of output.
 			$url       = esc_url( $mapping['target_url'] );
 			$rel_parts = array();
 			if ( $nofollow ) {
 				$rel_parts[] = 'nofollow';
+			}
+			if ( $sponsored ) {
+				$rel_parts[] = 'sponsored';
+			}
+			if ( $ugc ) {
+				$rel_parts[] = 'ugc';
 			}
 			if ( $new_tab ) {
 				$rel_parts[] = 'noopener';
@@ -178,8 +189,22 @@ class FPP_Interlinking_Replacer {
 			$rel_attr    = ! empty( $rel_parts ) ? ' rel="' . implode( ' ', $rel_parts ) . '"' : '';
 			$target_attr = $new_tab ? ' target="_blank"' : '';
 
-			$flags           = $case_sensitive ? '' : 'i';
-			$keyword_pattern = '/\b(' . $keyword . ')\b/' . $flags;
+			/*
+			 * v6.0.0: Unicode-safe word boundary matching.
+			 *
+			 * Standard `\b` treats accented characters (ö, ü, ä, é, ñ) as
+			 * non-word characters, breaking matching for keywords like "Göring".
+			 * We use lookahead/lookbehind for Unicode-safe boundaries:
+			 *  - Start: preceded by whitespace, start-of-string, >, ", ', (, [
+			 *  - End:   followed by whitespace, end-of-string, <, ", ', punctuation, ), ]
+			 *
+			 * The /u flag enables UTF-8 mode so \s matches Unicode whitespace
+			 * and the pattern handles multi-byte characters correctly.
+			 */
+			$flags           = $case_sensitive ? 'u' : 'iu';
+			$boundary_start  = '(?<=\s|^|>|"|\'|\(|\[)';
+			$boundary_end    = '(?=\s|$|<|"|\'|[.,;:!?\)\]\-])';
+			$keyword_pattern = '/' . $boundary_start . '(' . $keyword . ')' . $boundary_end . '/' . $flags;
 			$kw_count        = 0;
 
 			foreach ( $parts as &$part ) {

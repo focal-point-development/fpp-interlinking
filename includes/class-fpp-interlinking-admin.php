@@ -71,6 +71,14 @@ class FPP_Interlinking_Admin {
 		add_action( 'wp_ajax_fpp_interlinking_analyze_orphans', array( $this, 'ajax_analyze_orphans' ) );
 		add_action( 'wp_ajax_fpp_interlinking_analyze_distribution', array( $this, 'ajax_analyze_distribution' ) );
 		add_action( 'wp_ajax_fpp_interlinking_analyze_seo_content', array( $this, 'ajax_analyze_seo_content' ) );
+
+		// v6.0.0: Deep linking intelligence + JSON import/export.
+		add_action( 'wp_ajax_fpp_interlinking_analyze_ilr', array( $this, 'ajax_analyze_ilr' ) );
+		add_action( 'wp_ajax_fpp_interlinking_analyze_crawl_depth', array( $this, 'ajax_analyze_crawl_depth' ) );
+		add_action( 'wp_ajax_fpp_interlinking_analyze_anchors', array( $this, 'ajax_analyze_anchors' ) );
+		add_action( 'wp_ajax_fpp_interlinking_analyze_clusters', array( $this, 'ajax_analyze_clusters' ) );
+		add_action( 'wp_ajax_fpp_interlinking_export_json', array( $this, 'ajax_export_json' ) );
+		add_action( 'wp_ajax_fpp_interlinking_import_json', array( $this, 'ajax_import_json' ) );
 	}
 
 	/**
@@ -231,6 +239,30 @@ class FPP_Interlinking_Admin {
 				'view_post'              => esc_html__( 'View', 'fpp-interlinking' ),
 				'create_mapping'         => esc_html__( 'Create Mapping', 'fpp-interlinking' ),
 				'recommendations'        => esc_html__( 'Smart Recommendations', 'fpp-interlinking' ),
+				// v6.0.0: Deep linking intelligence.
+				'ilr_running'            => esc_html__( 'Analysing link rank...', 'fpp-interlinking' ),
+				'crawl_depth_running'    => esc_html__( 'Calculating crawl depth...', 'fpp-interlinking' ),
+				'anchor_running'         => esc_html__( 'Analysing anchor text...', 'fpp-interlinking' ),
+				'cluster_running'        => esc_html__( 'Detecting topic clusters...', 'fpp-interlinking' ),
+				'strong'                 => esc_html__( 'Strong', 'fpp-interlinking' ),
+				'medium'                 => esc_html__( 'Medium', 'fpp-interlinking' ),
+				'weak'                   => esc_html__( 'Weak', 'fpp-interlinking' ),
+				'good'                   => esc_html__( 'Good', 'fpp-interlinking' ),
+				'poor'                   => esc_html__( 'Poor', 'fpp-interlinking' ),
+				'unreachable'            => esc_html__( 'Unreachable', 'fpp-interlinking' ),
+				'depth_level'            => esc_html__( 'Depth Level', 'fpp-interlinking' ),
+				'pillar_page'            => esc_html__( 'Pillar Page', 'fpp-interlinking' ),
+				'related_pages'          => esc_html__( 'Related Pages', 'fpp-interlinking' ),
+				'shared_keywords'        => esc_html__( 'Shared Keywords', 'fpp-interlinking' ),
+				'anchor_text'            => esc_html__( 'Anchor Text', 'fpp-interlinking' ),
+				'quality'                => esc_html__( 'Quality', 'fpp-interlinking' ),
+				'suggestion'             => esc_html__( 'Suggestion', 'fpp-interlinking' ),
+				'link_from'              => esc_html__( 'Link From', 'fpp-interlinking' ),
+				'link_to'                => esc_html__( 'Link To', 'fpp-interlinking' ),
+				'sponsored'              => esc_html__( 'Sponsored', 'fpp-interlinking' ),
+				'ugc'                    => esc_html__( 'UGC', 'fpp-interlinking' ),
+				'no_clusters'            => esc_html__( 'No topic clusters detected. Try adding more content with related keywords.', 'fpp-interlinking' ),
+				'no_anchor_issues'       => esc_html__( 'All anchor text looks good!', 'fpp-interlinking' ),
 			),
 		) );
 	}
@@ -293,6 +325,18 @@ class FPP_Interlinking_Admin {
 		$base_url = admin_url( 'options-general.php?page=fpp-interlinking' );
 		?>
 		<div id="fpp-dashboard">
+			<!-- v6.0.0: Onboarding panel for first-time users -->
+			<div id="fpp-onboarding" class="fpp-onboarding-panel" style="display:none;">
+				<button type="button" class="fpp-onboarding-dismiss" title="<?php esc_attr_e( 'Dismiss', 'fpp-interlinking' ); ?>">&times;</button>
+				<h3><?php esc_html_e( 'Welcome to WP Interlinking!', 'fpp-interlinking' ); ?></h3>
+				<p><?php esc_html_e( 'Get started in 3 easy steps:', 'fpp-interlinking' ); ?></p>
+				<ol class="fpp-onboarding-steps">
+					<li><strong><?php esc_html_e( 'Add Keywords', 'fpp-interlinking' ); ?></strong> — <?php esc_html_e( 'Go to the Keywords tab and add keyword-to-URL mappings. Use Quick Search to find posts instantly.', 'fpp-interlinking' ); ?></li>
+					<li><strong><?php esc_html_e( 'Run Analysis', 'fpp-interlinking' ); ?></strong> — <?php esc_html_e( 'Open the Analysis tab to check your site health, find orphan pages, and discover content gaps.', 'fpp-interlinking' ); ?></li>
+					<li><strong><?php esc_html_e( 'Track Results', 'fpp-interlinking' ); ?></strong> — <?php esc_html_e( 'Monitor clicks and impressions in the Analytics tab to see how your internal links perform.', 'fpp-interlinking' ); ?></li>
+				</ol>
+			</div>
+
 			<div class="fpp-stat-cards" id="fpp-dashboard-cards">
 				<div class="fpp-stat-card fpp-card-blue">
 					<span class="fpp-stat-icon dashicons dashicons-tag" aria-hidden="true"></span>
@@ -394,6 +438,16 @@ class FPP_Interlinking_Admin {
 							</label>
 							<br />
 							<label>
+								<input type="checkbox" id="fpp-per-sponsored" value="1" />
+								<?php esc_html_e( 'Sponsored', 'fpp-interlinking' ); ?>
+							</label>
+							<br />
+							<label>
+								<input type="checkbox" id="fpp-per-ugc" value="1" />
+								<?php esc_html_e( 'UGC (User-Generated Content)', 'fpp-interlinking' ); ?>
+							</label>
+							<br />
+							<label>
 								<?php esc_html_e( 'Max replacements:', 'fpp-interlinking' ); ?>
 								<input type="number" id="fpp-per-max-replacements" min="0" max="<?php echo esc_attr( $max_cap ); ?>" value="0" class="small-text" />
 							</label>
@@ -435,6 +489,16 @@ class FPP_Interlinking_Admin {
 						<?php esc_html_e( 'Import CSV', 'fpp-interlinking' ); ?>
 					</label>
 					<input type="file" id="fpp-import-csv-file" accept=".csv" style="display:none;" />
+					<span class="fpp-toolbar-separator" style="display:inline-block;width:1px;height:20px;background:#dcdcde;margin:0 8px;vertical-align:middle;"></span>
+					<button type="button" id="fpp-export-json-btn" class="button">
+						<span class="dashicons dashicons-download" aria-hidden="true"></span>
+						<?php esc_html_e( 'Export JSON', 'fpp-interlinking' ); ?>
+					</button>
+					<label class="button fpp-import-label" for="fpp-import-json-file">
+						<span class="dashicons dashicons-upload" aria-hidden="true"></span>
+						<?php esc_html_e( 'Import JSON', 'fpp-interlinking' ); ?>
+					</label>
+					<input type="file" id="fpp-import-json-file" accept=".json" style="display:none;" />
 				</div>
 				<div class="fpp-toolbar-right">
 					<input type="search" id="fpp-keyword-search" class="regular-text"
@@ -596,13 +660,21 @@ class FPP_Interlinking_Admin {
 				<span class="dashicons dashicons-update" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
 				<?php esc_html_e( 'Generate', 'fpp-interlinking' ); ?>
 			</button>
-			<button type="button" class="fpp-subtab" data-subtab="orphans">
-				<span class="dashicons dashicons-warning" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
-				<?php esc_html_e( 'Orphans', 'fpp-interlinking' ); ?>
+			<button type="button" class="fpp-subtab" data-subtab="link-health">
+				<span class="dashicons dashicons-heart" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Link Health', 'fpp-interlinking' ); ?>
 			</button>
 			<button type="button" class="fpp-subtab" data-subtab="distribution">
 				<span class="dashicons dashicons-networking" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
 				<?php esc_html_e( 'Distribution', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="anchors">
+				<span class="dashicons dashicons-admin-links" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Anchors', 'fpp-interlinking' ); ?>
+			</button>
+			<button type="button" class="fpp-subtab" data-subtab="clusters">
+				<span class="dashicons dashicons-category" style="font-size: 14px; width: 14px; height: 14px; margin-right: 4px; vertical-align: text-bottom;"></span>
+				<?php esc_html_e( 'Clusters', 'fpp-interlinking' ); ?>
 			</button>
 		</div>
 
@@ -716,9 +788,11 @@ class FPP_Interlinking_Admin {
 			</div>
 		</div>
 
-		<!-- Sub-Tab: Orphan Pages -->
-		<div class="fpp-subtab-panel" data-panel="orphans">
-			<p class="description"><?php esc_html_e( 'Detect pages with zero inbound internal links — these are invisible to search engine crawlers and users navigating your site.', 'fpp-interlinking' ); ?></p>
+		<!-- Sub-Tab: Link Health (orphans + ILR + crawl depth) -->
+		<div class="fpp-subtab-panel" data-panel="link-health">
+
+			<h4><?php esc_html_e( 'Orphan Pages', 'fpp-interlinking' ); ?></h4>
+			<p class="description"><?php esc_html_e( 'Detect pages with zero inbound internal links — these are invisible to search engine crawlers.', 'fpp-interlinking' ); ?></p>
 			<div class="fpp-ai-controls">
 				<button type="button" id="fpp-detect-orphans-btn" class="button button-primary">
 					<?php esc_html_e( 'Detect Orphan Pages', 'fpp-interlinking' ); ?>
@@ -738,6 +812,31 @@ class FPP_Interlinking_Admin {
 					<tbody id="fpp-orphans-tbody"></tbody>
 				</table>
 			</div>
+
+			<hr style="margin: 24px 0;" />
+
+			<h4><?php esc_html_e( 'Internal Link Rank (ILR)', 'fpp-interlinking' ); ?></h4>
+			<p class="description"><?php esc_html_e( 'PageRank-style analysis that scores pages by internal link equity. Link from strong pages to weak pages to distribute authority.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-analyze-ilr-btn" class="button button-primary">
+					<?php esc_html_e( 'Analyse Link Rank', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-ilr-summary" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-ilr-results" class="fpp-ai-results" style="display:none;"></div>
+
+			<hr style="margin: 24px 0;" />
+
+			<h4><?php esc_html_e( 'Crawl Depth', 'fpp-interlinking' ); ?></h4>
+			<p class="description"><?php esc_html_e( 'How many clicks from the homepage to reach each page. Pages deeper than 3 clicks are harder for search engines to discover and index.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-analyze-crawl-depth-btn" class="button button-primary">
+					<?php esc_html_e( 'Analyse Crawl Depth', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-crawl-depth-summary" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-crawl-depth-results" class="fpp-ai-results" style="display:none;"></div>
+
 		</div>
 
 		<!-- Sub-Tab: Link Distribution -->
@@ -783,6 +882,30 @@ class FPP_Interlinking_Admin {
 					<tbody id="fpp-distribution-tbody"></tbody>
 				</table>
 			</div>
+		</div>
+
+		<!-- Sub-Tab: Anchor Text Quality -->
+		<div class="fpp-subtab-panel" data-panel="anchors">
+			<p class="description"><?php esc_html_e( 'Analyses anchor text across all internal links. Generic anchors like "click here" or "read more" should be replaced with descriptive keyword-rich text.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-analyze-anchors-btn" class="button button-primary">
+					<?php esc_html_e( 'Analyse Anchor Text', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-anchors-summary" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-anchor-results" class="fpp-ai-results" style="display:none;"></div>
+		</div>
+
+		<!-- Sub-Tab: Topic Clusters -->
+		<div class="fpp-subtab-panel" data-panel="clusters">
+			<p class="description"><?php esc_html_e( 'Identifies groups of related content based on shared keywords. Each cluster has a pillar page that should link to all related pages for topical authority.', 'fpp-interlinking' ); ?></p>
+			<div class="fpp-ai-controls">
+				<button type="button" id="fpp-analyze-clusters-btn" class="button button-primary">
+					<?php esc_html_e( 'Detect Topic Clusters', 'fpp-interlinking' ); ?>
+				</button>
+				<span id="fpp-clusters-summary" class="fpp-ai-status"></span>
+			</div>
+			<div id="fpp-cluster-results" class="fpp-ai-results" style="display:none;"></div>
 		</div>
 
 		<?php
@@ -1175,6 +1298,8 @@ class FPP_Interlinking_Admin {
 		$nofollow         = isset( $_POST['nofollow'] ) ? absint( $_POST['nofollow'] ) : 0;
 		$new_tab          = isset( $_POST['new_tab'] ) ? absint( $_POST['new_tab'] ) : 1;
 		$max_replacements = isset( $_POST['max_replacements'] ) ? absint( $_POST['max_replacements'] ) : 0;
+		$rel_sponsored    = isset( $_POST['rel_sponsored'] ) ? absint( $_POST['rel_sponsored'] ) : 0;
+		$rel_ugc          = isset( $_POST['rel_ugc'] ) ? absint( $_POST['rel_ugc'] ) : 0;
 
 		$id = FPP_Interlinking_DB::insert_keyword( array(
 			'keyword'          => $keyword,
@@ -1182,6 +1307,8 @@ class FPP_Interlinking_Admin {
 			'nofollow'         => $nofollow,
 			'new_tab'          => $new_tab,
 			'max_replacements' => $max_replacements,
+			'rel_sponsored'    => $rel_sponsored,
+			'rel_ugc'          => $rel_ugc,
 		) );
 
 		if ( $id ) {
@@ -1232,6 +1359,8 @@ class FPP_Interlinking_Admin {
 		$nofollow         = isset( $_POST['nofollow'] ) ? absint( $_POST['nofollow'] ) : 0;
 		$new_tab          = isset( $_POST['new_tab'] ) ? absint( $_POST['new_tab'] ) : 1;
 		$max_replacements = isset( $_POST['max_replacements'] ) ? absint( $_POST['max_replacements'] ) : 0;
+		$rel_sponsored    = isset( $_POST['rel_sponsored'] ) ? absint( $_POST['rel_sponsored'] ) : 0;
+		$rel_ugc          = isset( $_POST['rel_ugc'] ) ? absint( $_POST['rel_ugc'] ) : 0;
 
 		$result = FPP_Interlinking_DB::update_keyword( $id, array(
 			'keyword'          => $keyword,
@@ -1239,6 +1368,8 @@ class FPP_Interlinking_Admin {
 			'nofollow'         => $nofollow,
 			'new_tab'          => $new_tab,
 			'max_replacements' => $max_replacements,
+			'rel_sponsored'    => $rel_sponsored,
+			'rel_ugc'          => $rel_ugc,
 		) );
 
 		if ( false !== $result ) {
@@ -2313,6 +2444,162 @@ class FPP_Interlinking_Admin {
 		}
 
 		wp_send_json_success( $result );
+	}
+
+	/* ── v6.0.0: Deep Linking Intelligence Handlers ──────────────────── */
+
+	/**
+	 * AJAX: Calculate Internal Link Rank.
+	 *
+	 * @since 6.0.0
+	 */
+	public function ajax_analyze_ilr() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+		$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		$result = FPP_Interlinking_Analyzer::calculate_ilr( $post_types );
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Calculate crawl depth.
+	 *
+	 * @since 6.0.0
+	 */
+	public function ajax_analyze_crawl_depth() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+		$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		$result = FPP_Interlinking_Analyzer::calculate_crawl_depth( $post_types );
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Analyse anchor text quality.
+	 *
+	 * @since 6.0.0
+	 */
+	public function ajax_analyze_anchors() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+		$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		$result = FPP_Interlinking_Analyzer::analyze_anchor_text( $post_types );
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Detect topic clusters.
+	 *
+	 * @since 6.0.0
+	 */
+	public function ajax_analyze_clusters() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+		$post_types = FPP_Interlinking_DB::get_configured_post_types();
+		$result = FPP_Interlinking_Analyzer::detect_topic_clusters( $post_types );
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * AJAX: Export keywords and settings as JSON.
+	 *
+	 * @since 6.0.0
+	 */
+	public function ajax_export_json() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$keywords = FPP_Interlinking_DB::export_all();
+		$settings = array(
+			'max_replacements'   => get_option( 'fpp_interlinking_max_replacements', 1 ),
+			'nofollow'           => get_option( 'fpp_interlinking_nofollow', 0 ),
+			'new_tab'            => get_option( 'fpp_interlinking_new_tab', 1 ),
+			'case_sensitive'     => get_option( 'fpp_interlinking_case_sensitive', 0 ),
+			'max_links_per_post' => get_option( 'fpp_interlinking_max_links_per_post', 0 ),
+			'post_types'         => get_option( 'fpp_interlinking_post_types', 'post,page' ),
+			'excluded_posts'     => get_option( 'fpp_interlinking_excluded_posts', '' ),
+		);
+
+		$export = array(
+			'version'  => FPP_INTERLINKING_VERSION,
+			'exported' => current_time( 'mysql' ),
+			'site_url' => home_url(),
+			'keywords' => $keywords,
+			'settings' => $settings,
+		);
+
+		wp_send_json_success( array(
+			'json'     => wp_json_encode( $export, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ),
+			'filename' => 'wp-interlinking-export-' . gmdate( 'Y-m-d' ) . '.json',
+			'count'    => count( $keywords ),
+		) );
+	}
+
+	/**
+	 * AJAX: Import keywords and settings from JSON.
+	 *
+	 * @since 6.0.0
+	 */
+	public function ajax_import_json() {
+		check_ajax_referer( 'fpp_interlinking_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
+		}
+
+		$json_data = isset( $_POST['json_data'] ) ? wp_unslash( $_POST['json_data'] ) : '';
+		if ( empty( $json_data ) ) {
+			wp_send_json_error( array( 'message' => __( 'No JSON data provided.', 'fpp-interlinking' ) ) );
+		}
+
+		$data = json_decode( $json_data, true );
+		if ( null === $data || ! isset( $data['keywords'] ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid JSON format.', 'fpp-interlinking' ) ) );
+		}
+
+		$result = FPP_Interlinking_DB::import_keywords( $data['keywords'] );
+
+		$settings_imported = false;
+		if ( ! empty( $data['settings'] ) && isset( $_POST['import_settings'] ) && '1' === $_POST['import_settings'] ) {
+			$s = $data['settings'];
+			if ( isset( $s['max_replacements'] ) ) {
+				update_option( 'fpp_interlinking_max_replacements', absint( $s['max_replacements'] ) );
+			}
+			if ( isset( $s['nofollow'] ) ) {
+				update_option( 'fpp_interlinking_nofollow', absint( $s['nofollow'] ) );
+			}
+			if ( isset( $s['new_tab'] ) ) {
+				update_option( 'fpp_interlinking_new_tab', absint( $s['new_tab'] ) );
+			}
+			if ( isset( $s['case_sensitive'] ) ) {
+				update_option( 'fpp_interlinking_case_sensitive', absint( $s['case_sensitive'] ) );
+			}
+			if ( isset( $s['max_links_per_post'] ) ) {
+				update_option( 'fpp_interlinking_max_links_per_post', absint( $s['max_links_per_post'] ) );
+			}
+			if ( isset( $s['post_types'] ) ) {
+				update_option( 'fpp_interlinking_post_types', sanitize_text_field( $s['post_types'] ) );
+			}
+			$settings_imported = true;
+		}
+
+		delete_transient( 'fpp_interlinking_keywords_cache' );
+
+		wp_send_json_success( array(
+			'imported'          => $result['imported'],
+			'skipped'           => $result['skipped'],
+			'errors'            => $result['errors'],
+			'settings_imported' => $settings_imported,
+		) );
 	}
 
 	/* ── v3.0.0: Dashboard & Analytics Data Handlers ─────────────────── */

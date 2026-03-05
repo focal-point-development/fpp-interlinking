@@ -57,6 +57,8 @@ class FPP_Interlinking_Activator {
 			nofollow tinyint(1) NOT NULL DEFAULT 0,
 			new_tab tinyint(1) NOT NULL DEFAULT 1,
 			max_replacements int(11) NOT NULL DEFAULT 0,
+			rel_sponsored tinyint(1) NOT NULL DEFAULT 0,
+			rel_ugc tinyint(1) NOT NULL DEFAULT 0,
 			is_active tinyint(1) NOT NULL DEFAULT 1,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
