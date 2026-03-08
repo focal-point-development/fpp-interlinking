@@ -1928,6 +1928,17 @@
 				html += '<td><a href="' + FPP.escAttr(o.url) + '" target="_blank">' + FPP.escHtml(o.title) + '</a></td>';
 				html += '<td>' + FPP.escHtml(o.type) + '</td>';
 				html += '<td>' + FPP.formatNumber(o.word_count) + '</td>';
+				// "Link From" suggestions column.
+				html += '<td>';
+				if (o.suggestions && o.suggestions.length > 0) {
+					for (var si = 0; si < o.suggestions.length; si++) {
+						if (si > 0) html += ', ';
+						html += '<a href="' + FPP.escAttr(o.suggestions[si].url) + '" target="_blank" class="fpp-suggestion-link">' + FPP.escHtml(o.suggestions[si].title) + '</a>';
+					}
+				} else {
+					html += '<em>' + FPP.escHtml(fppInterlinking.i18n.no_suggestions || 'No suggestions') + '</em>';
+				}
+				html += '</td>';
 				html += '<td><a href="' + FPP.escAttr(o.url) + '" target="_blank" class="button button-small">' + FPP.escHtml(fppInterlinking.i18n.view_post || 'View') + '</a></td>';
 				html += '</tr>';
 			}
@@ -2193,8 +2204,8 @@
 		},
 
 		renderAnchorResults: function(data) {
-			var quality = data.quality_percent || 0;
-			var anchors = data.worst_offenders || [];
+			var quality = data.overall_quality || 0;
+			var anchors = data.links || [];
 
 			$('#fpp-anchors-summary').text(
 				(fppInterlinking.i18n.anchor_summary || '%1$d links analysed, %2$d%% quality score')
@@ -2214,6 +2225,7 @@
 					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.source_page || 'Source Page') + '</th>'
 					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.target_page || 'Target Page') + '</th>'
 					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.quality || 'Quality') + '</th>'
+					+ '<th>' + FPP.escHtml(fppInterlinking.i18n.suggestion || 'Suggestion') + '</th>'
 					+ '</tr></thead><tbody>';
 
 				var limit = Math.min(anchors.length, 50);
@@ -2225,6 +2237,7 @@
 					html += '<td>' + FPP.escHtml(a.source_title || a.source_url || '') + '</td>';
 					html += '<td>' + FPP.escHtml(a.target_title || a.target_url || '') + '</td>';
 					html += '<td><span class="fpp-anchor-badge quality-' + badge + '">' + FPP.escHtml(badge) + '</span></td>';
+					html += '<td>' + (a.suggestion ? FPP.escHtml(a.suggestion) : '') + '</td>';
 					html += '</tr>';
 				}
 				html += '</tbody></table>';

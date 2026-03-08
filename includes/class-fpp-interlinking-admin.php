@@ -325,6 +325,7 @@ class FPP_Interlinking_Admin {
 		$base_url = admin_url( 'options-general.php?page=fpp-interlinking' );
 		?>
 		<div id="fpp-dashboard">
+			<p class="description fpp-tab-intro"><?php esc_html_e( 'Overview of your interlinking strategy — keywords, active links, clicks, and site health at a glance.', 'fpp-interlinking' ); ?></p>
 			<!-- v6.0.0: Onboarding panel for first-time users -->
 			<div id="fpp-onboarding" class="fpp-onboarding-panel" style="display:none;">
 				<button type="button" class="fpp-onboarding-dismiss" title="<?php esc_attr_e( 'Dismiss', 'fpp-interlinking' ); ?>">&times;</button>
@@ -396,6 +397,7 @@ class FPP_Interlinking_Admin {
 	private function render_tab_keywords() {
 		$max_cap = FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT;
 		?>
+		<p class="description fpp-tab-intro"><?php esc_html_e( 'Keywords are words or phrases that automatically become links to a target URL. Add keywords below and the plugin replaces matching text with links across all your posts.', 'fpp-interlinking' ); ?></p>
 		<!-- Quick-Add from Post Search -->
 		<div class="fpp-section fpp-quick-add-section">
 			<h2><?php esc_html_e( 'Quick Add from Post Search', 'fpp-interlinking' ); ?></h2>
@@ -417,11 +419,17 @@ class FPP_Interlinking_Admin {
 			<table class="form-table">
 				<tr>
 					<th><label for="fpp-keyword"><?php esc_html_e( 'Keyword', 'fpp-interlinking' ); ?></label></th>
-					<td><input type="text" id="fpp-keyword" class="regular-text" placeholder="<?php esc_attr_e( 'Enter keyword or phrase', 'fpp-interlinking' ); ?>" /></td>
+					<td>
+						<input type="text" id="fpp-keyword" class="regular-text" placeholder="<?php esc_attr_e( 'e.g. keyword1, keyword2, keyword3', 'fpp-interlinking' ); ?>" />
+						<p class="description"><?php esc_html_e( 'Enter a keyword or phrase. Separate multiple keywords with commas to map them all to the same URL.', 'fpp-interlinking' ); ?></p>
+					</td>
 				</tr>
 				<tr>
 					<th><label for="fpp-target-url"><?php esc_html_e( 'Target URL', 'fpp-interlinking' ); ?></label></th>
-					<td><input type="url" id="fpp-target-url" class="regular-text" placeholder="https://example.com/page" /></td>
+					<td>
+						<input type="url" id="fpp-target-url" class="regular-text" placeholder="https://example.com/page" />
+						<p class="description"><?php esc_html_e( 'The page this keyword will link to when found in your content.', 'fpp-interlinking' ); ?></p>
+					</td>
 				</tr>
 				<tr>
 					<th><?php esc_html_e( 'Per-mapping overrides', 'fpp-interlinking' ); ?></th>
@@ -431,21 +439,25 @@ class FPP_Interlinking_Admin {
 								<input type="checkbox" id="fpp-per-nofollow" value="1" />
 								<?php esc_html_e( 'Nofollow', 'fpp-interlinking' ); ?>
 							</label>
+							<span class="description fpp-field-hint"><?php esc_html_e( '— Tells search engines not to pass link equity.', 'fpp-interlinking' ); ?></span>
 							<br />
 							<label>
 								<input type="checkbox" id="fpp-per-new-tab" value="1" checked />
 								<?php esc_html_e( 'Open in new tab', 'fpp-interlinking' ); ?>
 							</label>
+							<span class="description fpp-field-hint"><?php esc_html_e( '— Opens the link in a new browser tab.', 'fpp-interlinking' ); ?></span>
 							<br />
 							<label>
 								<input type="checkbox" id="fpp-per-sponsored" value="1" />
 								<?php esc_html_e( 'Sponsored', 'fpp-interlinking' ); ?>
 							</label>
+							<span class="description fpp-field-hint"><?php esc_html_e( '— For paid or affiliate links (Google guideline).', 'fpp-interlinking' ); ?></span>
 							<br />
 							<label>
 								<input type="checkbox" id="fpp-per-ugc" value="1" />
 								<?php esc_html_e( 'UGC (User-Generated Content)', 'fpp-interlinking' ); ?>
 							</label>
+							<span class="description fpp-field-hint"><?php esc_html_e( '— For user-generated content links (Google guideline).', 'fpp-interlinking' ); ?></span>
 							<br />
 							<label>
 								<?php esc_html_e( 'Max replacements:', 'fpp-interlinking' ); ?>
@@ -586,6 +598,7 @@ class FPP_Interlinking_Admin {
 		$engine_label = 'ai' === $engine ? __( 'AI Engine', 'fpp-interlinking' ) : __( 'Internal Engine', 'fpp-interlinking' );
 		$engine_class = 'ai' === $engine ? 'fpp-engine-ai' : 'fpp-engine-internal';
 		?>
+		<p class="description fpp-tab-intro"><?php esc_html_e( 'Analyse your site\'s internal linking structure. Extract keywords, score relevance, find content gaps, and generate mapping recommendations.', 'fpp-interlinking' ); ?></p>
 
 		<!-- Site Health Overview -->
 		<div class="fpp-health-overview" id="fpp-health-overview">
@@ -806,6 +819,7 @@ class FPP_Interlinking_Admin {
 							<th><?php esc_html_e( 'Page', 'fpp-interlinking' ); ?></th>
 							<th><?php esc_html_e( 'Type', 'fpp-interlinking' ); ?></th>
 							<th><?php esc_html_e( 'Words', 'fpp-interlinking' ); ?></th>
+							<th><?php esc_html_e( 'Link From', 'fpp-interlinking' ); ?></th>
 							<th><?php esc_html_e( 'Actions', 'fpp-interlinking' ); ?></th>
 						</tr>
 					</thead>
@@ -918,6 +932,7 @@ class FPP_Interlinking_Admin {
 	 */
 	private function render_tab_analytics() {
 		?>
+		<p class="description fpp-tab-intro"><?php esc_html_e( 'Track how visitors interact with your auto-generated links. Monitor clicks, impressions, and CTR to measure your interlinking impact.', 'fpp-interlinking' ); ?></p>
 		<div id="fpp-analytics">
 			<div class="fpp-analytics-toolbar">
 				<div class="fpp-period-selector">
@@ -1282,17 +1297,11 @@ class FPP_Interlinking_Admin {
 			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'fpp-interlinking' ) ) );
 		}
 
-		$keyword    = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
-		$target_url = isset( $_POST['target_url'] ) ? esc_url_raw( wp_unslash( $_POST['target_url'] ) ) : '';
+		$raw_keyword = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
+		$target_url  = isset( $_POST['target_url'] ) ? esc_url_raw( wp_unslash( $_POST['target_url'] ) ) : '';
 
-		if ( empty( $keyword ) || empty( $target_url ) ) {
+		if ( empty( $raw_keyword ) || empty( $target_url ) ) {
 			wp_send_json_error( array( 'message' => __( 'Keyword and URL are required.', 'fpp-interlinking' ) ) );
-		}
-
-		if ( FPP_Interlinking_DB::keyword_exists( $keyword ) ) {
-			wp_send_json_error( array(
-				'message' => __( 'This keyword already exists. Please use a different keyword or edit the existing one.', 'fpp-interlinking' ),
-			) );
 		}
 
 		$nofollow         = isset( $_POST['nofollow'] ) ? absint( $_POST['nofollow'] ) : 0;
@@ -1301,32 +1310,97 @@ class FPP_Interlinking_Admin {
 		$rel_sponsored    = isset( $_POST['rel_sponsored'] ) ? absint( $_POST['rel_sponsored'] ) : 0;
 		$rel_ugc          = isset( $_POST['rel_ugc'] ) ? absint( $_POST['rel_ugc'] ) : 0;
 
-		$id = FPP_Interlinking_DB::insert_keyword( array(
-			'keyword'          => $keyword,
+		// v6.1.0: Support comma-separated multi-keyword input.
+		$keywords = array_filter( array_map( 'trim', explode( ',', $raw_keyword ) ) );
+
+		if ( empty( $keywords ) ) {
+			wp_send_json_error( array( 'message' => __( 'Keyword and URL are required.', 'fpp-interlinking' ) ) );
+		}
+
+		$data = array(
 			'target_url'       => $target_url,
 			'nofollow'         => $nofollow,
 			'new_tab'          => $new_tab,
 			'max_replacements' => $max_replacements,
 			'rel_sponsored'    => $rel_sponsored,
 			'rel_ugc'          => $rel_ugc,
-		) );
+		);
 
-		if ( $id ) {
-			delete_transient( 'fpp_interlinking_keywords_cache' );
-			wp_send_json_success( array(
-				'message' => __( 'Keyword added successfully.', 'fpp-interlinking' ),
-				'keyword' => array(
-					'id'               => $id,
-					'keyword'          => $keyword,
-					'target_url'       => $target_url,
-					'nofollow'         => $nofollow,
-					'new_tab'          => $new_tab,
-					'max_replacements' => min( $max_replacements, FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT ),
-					'is_active'        => 1,
-				),
-			) );
+		// Single keyword — preserve existing response shape.
+		if ( 1 === count( $keywords ) ) {
+			$keyword = $keywords[0];
+
+			if ( FPP_Interlinking_DB::keyword_exists( $keyword ) ) {
+				wp_send_json_error( array(
+					'message' => __( 'This keyword already exists. Please use a different keyword or edit the existing one.', 'fpp-interlinking' ),
+				) );
+			}
+
+			$data['keyword'] = $keyword;
+			$id              = FPP_Interlinking_DB::insert_keyword( $data );
+
+			if ( $id ) {
+				delete_transient( 'fpp_interlinking_keywords_cache' );
+				wp_send_json_success( array(
+					'message' => __( 'Keyword added successfully.', 'fpp-interlinking' ),
+					'keyword' => array(
+						'id'               => $id,
+						'keyword'          => $keyword,
+						'target_url'       => $target_url,
+						'nofollow'         => $nofollow,
+						'new_tab'          => $new_tab,
+						'max_replacements' => min( $max_replacements, FPP_INTERLINKING_MAX_REPLACEMENTS_LIMIT ),
+						'is_active'        => 1,
+					),
+				) );
+			} else {
+				wp_send_json_error( array( 'message' => __( 'Failed to add keyword.', 'fpp-interlinking' ) ) );
+			}
+		}
+
+		// Multiple keywords — insert each, collect results.
+		$added   = 0;
+		$skipped = 0;
+		$failed  = 0;
+
+		foreach ( $keywords as $kw ) {
+			if ( FPP_Interlinking_DB::keyword_exists( $kw ) ) {
+				++$skipped;
+				continue;
+			}
+
+			$data['keyword'] = $kw;
+			$id              = FPP_Interlinking_DB::insert_keyword( $data );
+
+			if ( $id ) {
+				++$added;
+			} else {
+				++$failed;
+			}
+		}
+
+		delete_transient( 'fpp_interlinking_keywords_cache' );
+
+		$parts = array();
+		if ( $added > 0 ) {
+			/* translators: %d: number of keywords added */
+			$parts[] = sprintf( _n( '%d keyword added', '%d keywords added', $added, 'fpp-interlinking' ), $added );
+		}
+		if ( $skipped > 0 ) {
+			/* translators: %d: number of duplicate keywords skipped */
+			$parts[] = sprintf( _n( '%d skipped (duplicate)', '%d skipped (duplicates)', $skipped, 'fpp-interlinking' ), $skipped );
+		}
+		if ( $failed > 0 ) {
+			/* translators: %d: number of keywords that failed to insert */
+			$parts[] = sprintf( _n( '%d failed', '%d failed', $failed, 'fpp-interlinking' ), $failed );
+		}
+
+		$message = implode( ', ', $parts ) . '.';
+
+		if ( $added > 0 ) {
+			wp_send_json_success( array( 'message' => $message ) );
 		} else {
-			wp_send_json_error( array( 'message' => __( 'Failed to add keyword.', 'fpp-interlinking' ) ) );
+			wp_send_json_error( array( 'message' => $message ) );
 		}
 	}
 

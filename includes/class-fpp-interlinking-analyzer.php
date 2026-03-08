@@ -662,6 +662,93 @@ class FPP_Interlinking_Analyzer {
 			}
 		}
 
+		// Cross-reference with topic clusters: posts in same cluster but not linked = high-priority gap.
+		$cluster_data = self::detect_topic_clusters( $post_types );
+		$pid_cluster  = array(); // post_id => cluster index.
+		if ( ! empty( $cluster_data['clusters'] ) ) {
+			foreach ( $cluster_data['clusters'] as $ci => $cluster ) {
+				$all_members = array( $cluster['pillar']['id'] );
+				foreach ( $cluster['pages'] as $cp ) {
+					$all_members[] = $cp['id'];
+				}
+				foreach ( $all_members as $mid ) {
+					$pid_cluster[ $mid ] = $ci;
+				}
+			}
+		}
+
+		// Build a set of existing link pairs for quick lookup.
+		$graph      = self::build_link_graph( $post_types );
+		$linked_set = array();
+		if ( ! empty( $graph['links'] ) ) {
+			foreach ( $graph['links'] as $link ) {
+				$linked_set[ $link['source'] . '-' . $link['target'] ] = true;
+			}
+		}
+
+		// Add cluster-based gaps: same cluster but no link between them.
+		if ( ! empty( $cluster_data['clusters'] ) ) {
+			foreach ( $cluster_data['clusters'] as $cluster ) {
+				$members = array( $cluster['pillar']['id'] );
+				foreach ( $cluster['pages'] as $cp ) {
+					$members[] = $cp['id'];
+				}
+				for ( $ci = 0; $ci < count( $members ); $ci++ ) {
+					for ( $cj = $ci + 1; $cj < count( $members ); $cj++ ) {
+						$a = $members[ $ci ];
+						$b = $members[ $cj ];
+
+						// Skip if already linked in either direction.
+						if ( isset( $linked_set[ $a . '-' . $b ] ) || isset( $linked_set[ $b . '-' . $a ] ) ) {
+							continue;
+						}
+
+						$pair_key = min( $a, $b ) . '-' . max( $a, $b );
+						if ( isset( $seen_pairs[ $pair_key ] ) ) {
+							continue;
+						}
+						$seen_pairs[ $pair_key ] = true;
+
+						if ( isset( $post_data[ $a ] ) && isset( $post_data[ $b ] ) ) {
+							$gaps[] = array(
+								'keyword'      => implode( ', ', array_slice( $cluster['keywords'], 0, 3 ) ),
+								'source_id'    => $a,
+								'source_title' => $post_data[ $a ]['title'],
+								'target_id'    => $b,
+								'target_title' => $post_data[ $b ]['title'],
+								'target_url'   => $post_data[ $b ]['url'],
+								'confidence'   => 75,
+								'reason'       => __( 'Same topic cluster but no link between these posts.', 'fpp-interlinking' ),
+							);
+						}
+					}
+				}
+			}
+		}
+
+		// Boost existing gaps: same cluster (+10) and deep crawl depth (+5).
+		$depth_data  = self::calculate_crawl_depth( $post_types );
+		$page_depths = array();
+		if ( ! is_wp_error( $depth_data ) && ! empty( $depth_data['pages'] ) ) {
+			foreach ( $depth_data['pages'] as $dp ) {
+				$page_depths[ $dp['id'] ] = $dp['depth'];
+			}
+		}
+
+		foreach ( $gaps as &$gap ) {
+			// Boost if source and target share a cluster.
+			if ( isset( $pid_cluster[ $gap['source_id'] ], $pid_cluster[ $gap['target_id'] ] )
+				&& $pid_cluster[ $gap['source_id'] ] === $pid_cluster[ $gap['target_id'] ] ) {
+				$gap['confidence'] = min( $gap['confidence'] + 10, 98 );
+			}
+
+			// Boost if target is at crawl depth > 3.
+			if ( isset( $page_depths[ $gap['target_id'] ] ) && $page_depths[ $gap['target_id'] ] > 3 ) {
+				$gap['confidence'] = min( $gap['confidence'] + 5, 98 );
+			}
+		}
+		unset( $gap );
+
 		// Sort by confidence descending, limit results.
 		usort( $gaps, function( $a, $b ) {
 			return $b['confidence'] - $a['confidence'];
@@ -732,6 +819,15 @@ class FPP_Interlinking_Analyzer {
 		}
 		wp_reset_postdata();
 
+		// Compute ILR scores once for authority-blended ranking (cached via transient).
+		$ilr_data   = self::calculate_ilr( $post_types );
+		$ilr_scores = array();
+		if ( ! is_wp_error( $ilr_data ) && ! empty( $ilr_data['pages'] ) ) {
+			foreach ( $ilr_data['pages'] as $p ) {
+				$ilr_scores[ $p['id'] ] = $p['ilr'];
+			}
+		}
+
 		$mappings       = array();
 		$used_keywords  = array();
 
@@ -764,6 +860,25 @@ class FPP_Interlinking_Analyzer {
 				if ( empty( $scored ) ) {
 					continue;
 				}
+
+				// Blend ILR authority: higher-authority pages get up to +15 bonus.
+				foreach ( $scored as &$s ) {
+					if ( isset( $ilr_scores[ $s['id'] ] ) ) {
+						$ilr_bonus   = round( ( $ilr_scores[ $s['id'] ] / 100 ) * 15 );
+						$s['score']  = min( $s['score'] + $ilr_bonus, 100 );
+						$s['reason'] .= ' ' . sprintf(
+							/* translators: %d: ILR bonus points. */
+							__( '+%d ILR authority bonus.', 'fpp-interlinking' ),
+							$ilr_bonus
+						);
+					}
+				}
+				unset( $s );
+
+				// Re-sort after ILR blending.
+				usort( $scored, function( $a, $b ) {
+					return $b['score'] - $a['score'];
+				} );
 
 				$best = $scored[0];
 
@@ -1365,6 +1480,75 @@ class FPP_Interlinking_Analyzer {
 			return $b['word_count'] - $a['word_count'];
 		} );
 
+		// Generate "Link From" suggestions: find pages that could link to each orphan.
+		$ilr_data   = self::calculate_ilr( $post_types );
+		$ilr_scores = array();
+		if ( ! is_wp_error( $ilr_data ) && ! empty( $ilr_data['pages'] ) ) {
+			foreach ( $ilr_data['pages'] as $p ) {
+				$ilr_scores[ $p['id'] ] = $p['ilr'];
+			}
+		}
+
+		$orphan_limit = min( count( $orphans ), 20 );
+		for ( $oi = 0; $oi < $orphan_limit; $oi++ ) {
+			$orphan = &$orphans[ $oi ];
+			$orphan['suggestions'] = array();
+
+			// Extract top keyword for this orphan page.
+			$kws = self::extract_keywords( $orphan['id'], 1 );
+			if ( is_wp_error( $kws ) || empty( $kws ) ) {
+				continue;
+			}
+
+			$top_keyword = $kws[0]['keyword'];
+
+			// Score non-orphan pages as potential link sources.
+			$source_candidates = array();
+			foreach ( $graph['post_info'] as $pid => $info ) {
+				if ( $pid === $orphan['id'] ) {
+					continue;
+				}
+				$source_candidates[] = array(
+					'id'      => $pid,
+					'title'   => $info['title'],
+					'url'     => $info['url'],
+					'excerpt' => '',
+				);
+			}
+
+			if ( empty( $source_candidates ) ) {
+				continue;
+			}
+
+			// Limit candidates for performance.
+			$source_candidates = array_slice( $source_candidates, 0, 30 );
+			$scored = self::score_relevance( $top_keyword, $source_candidates, $post_types );
+
+			// Blend ILR scores: prefer high-authority pages as link sources.
+			foreach ( $scored as &$s ) {
+				if ( isset( $ilr_scores[ $s['id'] ] ) ) {
+					$s['score'] = min( $s['score'] + round( ( $ilr_scores[ $s['id'] ] / 100 ) * 10 ), 100 );
+				}
+			}
+			unset( $s );
+
+			usort( $scored, function( $a, $b ) {
+				return $b['score'] - $a['score'];
+			} );
+
+			// Take top 3 suggestions.
+			foreach ( array_slice( $scored, 0, 3 ) as $suggestion ) {
+				if ( $suggestion['score'] < 20 ) {
+					break;
+				}
+				$orphan['suggestions'][] = array(
+					'title' => $suggestion['title'],
+					'url'   => $suggestion['url'],
+				);
+			}
+		}
+		unset( $orphan );
+
 		$total = $graph['total'];
 		$count = count( $orphans );
 
@@ -1883,6 +2067,7 @@ class FPP_Interlinking_Analyzer {
 		$good_count  = 0;
 		$warn_count  = 0;
 		$poor_count  = 0;
+		$kw_cache    = array(); // Cache keyword lookups per target ID.
 
 		if ( ! empty( $graph['anchor_data'] ) ) {
 			foreach ( $graph['anchor_data'] as $ad ) {
@@ -1917,6 +2102,21 @@ class FPP_Interlinking_Analyzer {
 				} elseif ( mb_strlen( $anchor, 'UTF-8' ) < 3 ) {
 					$quality    = 'warning';
 					$suggestion = __( 'Anchor text is very short — add more descriptive context.', 'fpp-interlinking' );
+				}
+
+				// For poor/warning anchors, suggest the target page's top keyword.
+				if ( 'good' !== $quality ) {
+					if ( ! isset( $kw_cache[ $tgt ] ) ) {
+						$tgt_kws = self::extract_keywords( $tgt, 1 );
+						$kw_cache[ $tgt ] = ( ! is_wp_error( $tgt_kws ) && ! empty( $tgt_kws ) ) ? $tgt_kws[0]['keyword'] : '';
+					}
+					if ( ! empty( $kw_cache[ $tgt ] ) ) {
+						$suggestion .= ' ' . sprintf(
+							/* translators: %s: suggested keyword to use as anchor text. */
+							__( 'Try: "%s"', 'fpp-interlinking' ),
+							$kw_cache[ $tgt ]
+						);
+					}
 				}
 
 				if ( 'good' === $quality ) {
